@@ -35,8 +35,8 @@ flowchart TD
 ## 2. Структура модулей и зоны ответственности
 
 ### 2.0. Page & Table Guard Module (`isBuildsPage`, `isBuildsTable`)
-- **Ответственность:** Защита от ложных срабатываний скрипта на страницах визарда загрузки (`selectedition.php`, `selectlang.php`, `get.php`, `downloadpack.php`, `findfiles.php`).
-- **Логика:** Проверка белого списка путей URL и обязательное наличие в таблице ссылок на переход к сборкам (`selectlang.php?id=`).
+- **Ответственность:** Защита от ложных срабатываний скрипта на страницах визарда загрузки (`selectedition.php`, `selectlang.php`, `get.php`, `downloadpack.php`, `findfiles.php`) и корректная привязка к целевой таблице сборок на главной странице (`/` и `/index.php`).
+- **Логика:** Проверка белого списка путей URL, исключение вспомогательного блока быстрых кнопок (`.home-quick-options`), обязательное наличие в таблице ссылок на переход к сборкам (`selectlang.php?id=`) и проверка минимального количества строк (`>= 2`).
 
 ### 2.1. Parser Module (`parseRow`, `detectPackageCategory`, `normalizeArch`, `detectOS`, `detectBranch`, `detectType`, `detectBuildNumber`, `detectVersion`)
 - **Ответственность:** Извлечение чистых структурированных метаданных из HTML-элементов `tr` и `td`.

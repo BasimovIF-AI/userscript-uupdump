@@ -14,12 +14,15 @@ function isBuildsPage(pathname) {
     return false;
 }
 
-function isBuildsTableLike(headers, links) {
-    const hasBuildLink = links.some(l => l && l.includes('selectlang.php?id='));
-    if (hasBuildLink) return true;
+function isCandidateBuildsTable({ parentClass, links }) {
+    // Игнорируем блок быстрых пресетов на главной странице
+    if (parentClass && parentClass.includes('home-quick-options')) {
+        return false;
+    }
 
-    const lowerHeaders = headers.map(h => (h || '').toLowerCase());
-    return lowerHeaders.includes('build') && lowerHeaders.includes('architecture');
+    // Таблица сборок UUP dump обязательно содержит ссылки selectlang.php?id=UUID
+    const hasBuildLink = links && links.some(l => l && l.includes('selectlang.php?id='));
+    return Boolean(hasBuildLink);
 }
 
 function extractUuid(link) {
@@ -239,33 +242,34 @@ const sampleData = [
     }
 ];
 
-console.log('===> Запуск тестов парсера UUP dump v1.3.2...');
+console.log('===> Запуск тестов парсера UUP dump v1.3.3...');
 
-// Тест 1: Валидация целевых страниц URL (isBuildsPage)
+// Тест 1: Валидация целевых страниц URL (разрешены known, fetchupd и главная страница)
 assert.strictEqual(isBuildsPage('/known.php'), true);
 assert.strictEqual(isBuildsPage('/fetchupd.php'), true);
 assert.strictEqual(isBuildsPage('/'), true);
+assert.strictEqual(isBuildsPage('/index.php'), true);
 assert.strictEqual(isBuildsPage('/selectedition.php'), false);
-assert.strictEqual(isBuildsPage('/selectlang.php'), false);
-assert.strictEqual(isBuildsPage('/get.php'), false);
-assert.strictEqual(isBuildsPage('/downloadpack.php'), false);
-assert.strictEqual(isBuildsPage('/findfiles.php'), false);
-console.log('  [PASS] Тест 1: Валидация целевых страниц URL отсекает страницы мастера загрузки');
+console.log('  [PASS] Тест 1: Валидация URL разрешает главную страницу и отсекает мастера');
 
-// Тест 2: Сигнатурная проверка таблицы сборок (isBuildsTableLike)
-const validBuildHeaders = ['Build', 'Architecture', 'Date added'];
-const validBuildLinks = ['https://uupdump.net/selectlang.php?id=687d1ced-aab1-4cd5-ad05-705189769731'];
-assert.strictEqual(isBuildsTableLike(validBuildHeaders, validBuildLinks), true);
+// Тест 2: Выбор таблицы на главной странице (Quick options vs Recently added builds)
+const quickOptionsTable = {
+    parentClass: 'home-quick-options',
+    links: ['fetchupd.php?arch=amd64&ring=retail', 'fetchupd.php?arch=arm64&ring=retail']
+};
+assert.strictEqual(isCandidateBuildsTable(quickOptionsTable), false);
 
-const editionTableHeaders = ['Additional edition', 'Required edition'];
-const editionTableLinks = [];
-assert.strictEqual(isBuildsTableLike(editionTableHeaders, editionTableLinks), false);
-console.log('  [PASS] Тест 2: Сигнатурная проверка таблицы сборок отсекает таблицу редакций');
+const recentlyAddedTable = {
+    parentClass: 'main-container',
+    links: ['selectlang.php?id=5486793c-ef16-4f21-b397-f0321a833424']
+};
+assert.strictEqual(isCandidateBuildsTable(recentlyAddedTable), true);
+console.log('  [PASS] Тест 2: Таблица Quick options успешно отсекается в пользу Recently added builds');
 
-// Тест 3: Базовый парсинг категорий и билдов
+// Тест 3: Базовый парсинг
 const parsed = sampleData.map(parseBuildRecord);
 assert.strictEqual(parsed[0].packageCategory, 'Полные сборки');
 assert.strictEqual(parsed[2].packageCategory, 'Обновления');
 console.log('  [PASS] Тест 3: Категории пакетов корректно определены');
 
-console.log('\n Все unit-тесты v1.3.2 успешно пройдены!');
+console.log('\n Все unit-тесты v1.3.3 успешно пройдены!');

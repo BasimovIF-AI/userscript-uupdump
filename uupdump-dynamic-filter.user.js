@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.3.2
+// @version      1.3.3
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -29,7 +29,7 @@
         if (/(selectedition|selectlang|get|downloadpack|findfiles|faq)\.php/i.test(pathname)) {
             return false;
         }
-        // Разрешены только страницы со списками сборок
+        // Разрешены страницы со списками сборок (включая главную)
         if (/(known|fetchupd)\.php/i.test(pathname) || pathname === '/' || pathname === '/index.php') {
             return true;
         }
@@ -38,13 +38,20 @@
 
     function isBuildsTable(table) {
         if (!table) return false;
-        // Каждая строка сборок в UUP dump содержит ссылку на переход к сборке (selectlang.php?id=UUID)
-        if (table.querySelector('a[href*="selectlang.php?id="]')) {
-            return true;
+
+        // Исключаем блок быстрых пресетов на главной странице
+        if (table.closest('.home-quick-options')) {
+            return false;
         }
-        // Дополнительная проверка структуры заголовков
-        const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim().toLowerCase());
-        return headers.includes('build') && headers.includes('architecture');
+
+        // Таблица сборок UUP dump обязательно содержит ссылки перехода к сборке (selectlang.php?id=UUID)
+        if (!table.querySelector('a[href*="selectlang.php?id="]')) {
+            return false;
+        }
+
+        // Проверяем, что в таблице есть строки данных
+        const rows = table.querySelectorAll('tr');
+        return rows.length >= 2;
     }
 
     // -------------------------------------------------------------
@@ -74,7 +81,7 @@
     }
 
     function detectBuildNumber(title) {
-        // Извлекает номера вида 26300.9807, 26300.10008, 10.0.26300.9711
+        // Извлекает номера вида 26300.9807, 26300.10008, 10.0.26300.9711, 28120.3302
         const mFull = title.match(/\b(?:10\.0\.)?(\d{5}(?:\.\d+)?)\b/);
         return mFull ? mFull[1] : '';
     }
@@ -84,6 +91,7 @@
         const major = parseInt(buildStr.split('.')[0], 10);
         if (isNaN(major)) return null;
 
+        if (major >= 28000) return 'Future / Experimental';
         if (major >= 26300 && major < 26400) return '26H2';
         if (major >= 26100 && major < 26300) return '24H2';
         if (major === 22631) return '23H2';
@@ -127,6 +135,7 @@
         if (/Cumulative Update/i.test(title)) return 'Cumulative Update';
         if (/Preview Update/i.test(title)) return 'Preview Update';
         if (/Feature update/i.test(title)) return 'Feature Update';
+        if (/Quality Update/i.test(title)) return 'Quality Update';
         if (/Security Update/i.test(title)) return 'Security Update';
         if (/Dynamic Update/i.test(title)) return 'Dynamic Update';
         if (/Setup Duo/i.test(title)) return 'Setup Duo';
@@ -700,7 +709,6 @@
     // МОДУЛЬ 4: ИНИЦИАЛИЗАЦИЯ И НАБЛЮДЕНИЕ ЗА DOM
     // -------------------------------------------------------------
     function init() {
-        // Проверка: страница обязана быть страницей списка сборок
         if (!isBuildsPage(window.location.pathname)) {
             if (state.panelEl) {
                 state.panelEl.remove();
@@ -709,7 +717,7 @@
             return false;
         }
 
-        // Поиск именно таблицы сборок
+        // Ищем целевую таблицу сборок (на главной странице пропускает Quick options и находит Recently added builds)
         const tables = Array.from(document.querySelectorAll('table.ui.table, table.table'));
         const table = tables.find(isBuildsTable);
         if (!table) return false;
