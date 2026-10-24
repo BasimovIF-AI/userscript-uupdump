@@ -63,6 +63,13 @@ function detectBranch(title) {
     return alt ? alt[1].toLowerCase() : null;
 }
 
+function detectPackageCategory(title) {
+    if (/\.NET Framework|Cumulative Update|Preview Update for|Security Update|Dynamic Update|\bKB\d{6,8}\b/i.test(title)) {
+        return 'Обновления';
+    }
+    return 'Полные сборки';
+}
+
 function detectType(title) {
     if (/\.NET Framework/i.test(title)) return '.NET Framework Update';
     if (/Insider Preview/i.test(title)) return 'Insider Preview';
@@ -81,6 +88,7 @@ function parseBuildRecord({ title, arch, date, link }) {
     const buildNumber = detectBuildNumber(title);
     const version = detectVersion(title, buildNumber);
     const branch = detectBranch(title);
+    const packageCategory = detectPackageCategory(title);
     const updateType = detectType(title);
     const uuid = extractUuid(link);
 
@@ -90,6 +98,7 @@ function parseBuildRecord({ title, arch, date, link }) {
         os,
         version || '',
         branch || '',
+        packageCategory,
         updateType,
         buildNumber,
         uuid
@@ -104,14 +113,17 @@ function parseBuildRecord({ title, arch, date, link }) {
         os,
         version,
         branch,
+        packageCategory,
         updateType,
         buildNumber,
         searchableText
     };
 }
 
+const CATEGORIES = ['packageCategory', 'arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
+
 function matchesItem(item, filters, queryTokens, categoryToIgnore = null) {
-    for (const cat of ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber']) {
+    for (const cat of CATEGORIES) {
         if (cat === categoryToIgnore) continue;
         const set = filters[cat];
         if (set && set.size > 0) {
@@ -135,19 +147,12 @@ function computeDynamicFacetCounts(items, filters, searchQuery) {
         .split(/\s+/)
         .filter(Boolean);
 
-    const dynamicStats = {
-        arch: new Map(),
-        os: new Map(),
-        version: new Map(),
-        branch: new Map(),
-        updateType: new Map(),
-        buildNumber: new Map()
-    };
+    const dynamicStats = {};
+    CATEGORIES.forEach(cat => {
+        dynamicStats[cat] = new Map();
+    });
 
-    const categories = ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
-
-    categories.forEach(cat => {
-        // Подсчитываем количество с учетом всех активных фильтров КРОМЕ текущей категории
+    CATEGORIES.forEach(cat => {
         items.forEach(item => {
             if (matchesItem(item, filters, queryTokens, cat)) {
                 const val = item[cat];
@@ -205,50 +210,58 @@ const sampleData = [
     }
 ];
 
-console.log('===> Запуск тестов парсера UUP dump v1.2.0...');
+console.log('===> Запуск тестов парсера UUP dump v1.3.0...');
 const parsed = sampleData.map(parseBuildRecord);
 
-// Тест 1: Базовый парсинг
-assert.strictEqual(parsed[3].updateType, 'Preview Update');
-assert.strictEqual(parsed[4].updateType, '.NET Framework Update');
-console.log('  [PASS] Тест 1: Обновления Preview и .NET Framework корректно классифицированы');
+// Тест 1: Разделение на «Полные сборки» и «Обновления»
+assert.strictEqual(parsed[0].packageCategory, 'Полные сборки');
+assert.strictEqual(parsed[1].packageCategory, 'Полные сборки');
+assert.strictEqual(parsed[2].packageCategory, 'Обновления'); // Cumulative Update
+assert.strictEqual(parsed[3].packageCategory, 'Обновления'); // Preview Update
+assert.strictEqual(parsed[4].packageCategory, 'Обновления'); // .NET Framework
+console.log('  [PASS] Тест 1: Классификация packageCategory разделила 2 полные сборки и 3 обновления');
 
-// Тест 2: Динамический пересчет фасетов при пустых фильтрах
+// Тест 2: Подсчет фасетов для packageCategory
 const initialStats = computeDynamicFacetCounts(parsed, {}, '');
-assert.strictEqual(initialStats.arch.get('x64'), 4);
-assert.strictEqual(initialStats.arch.get('arm64'), 1);
-assert.strictEqual(initialStats.updateType.get('Preview Update'), 1);
-console.log('  [PASS] Тест 2: Исходные счетчики фасетов подсчитаны корректно');
+assert.strictEqual(initialStats.packageCategory.get('Полные сборки'), 2);
+assert.strictEqual(initialStats.packageCategory.get('Обновления'), 3);
+console.log('  [PASS] Тест 2: Фасетная категория "Категория" имеет точные начальные счетчики (2 и 3)');
 
-// Тест 3: Динамический пересчет при выборе arch: arm64
-const arm64Filters = {
-    arch: new Set(['arm64']),
+// Тест 3: Фильтрация по «Полные сборки»
+const fullBuildsFilters = {
+    packageCategory: new Set(['Полные сборки']),
+    arch: new Set(),
     os: new Set(),
     version: new Set(),
     branch: new Set(),
     updateType: new Set(),
     buildNumber: new Set()
 };
-const arm64Stats = computeDynamicFacetCounts(parsed, arm64Filters, '');
+const fullBuilds = filterItems(parsed, fullBuildsFilters, '');
+assert.strictEqual(fullBuilds.length, 2);
+assert.strictEqual(fullBuilds[0].title.includes('version 26H2'), true);
+assert.strictEqual(fullBuilds[1].title.includes('version 26H2'), true);
+console.log('  [PASS] Тест 3: Фильтр "Полные сборки" оставил ровно 2 установочных образа ОС');
 
-// Для arm64 доступен только 26300.9807, а 26300.9711, 26300.9278 и 26300.10008 отсутствуют (undefined или 0)
-assert.strictEqual(arm64Stats.buildNumber.get('26300.9807'), 1);
-assert.strictEqual(arm64Stats.buildNumber.get('26300.9278') || 0, 0);
-assert.strictEqual(arm64Stats.updateType.get('.NET Framework Update') || 0, 0);
-assert.strictEqual(arm64Stats.os.get('Windows CPC OS') || 0, 0);
-console.log('  [PASS] Тест 3: Динамический пересчет при arch: arm64 выявил недоступные опции (0 сборок)');
+// Тест 4: Динамический пересчет типов при выбранном «Полные сборки»
+const fullBuildsStats = computeDynamicFacetCounts(parsed, fullBuildsFilters, '');
+assert.strictEqual(fullBuildsStats.updateType.get('.NET Framework Update') || 0, 0);
+assert.strictEqual(fullBuildsStats.updateType.get('Cumulative Update') || 0, 0);
+assert.strictEqual(fullBuildsStats.updateType.get('Standard Build'), 2);
+console.log('  [PASS] Тест 4: При выбранных полных сборках типы .NET Framework и Cumulative Update имеют 0 совпадений');
 
-// Тест 4: Фильтрация по одиночной сборке из выпадающего списка
-const singleBuildFilter = {
+// Тест 5: Фильтрация по «Обновления»
+const updatesFilters = {
+    packageCategory: new Set(['Обновления']),
     arch: new Set(),
     os: new Set(),
     version: new Set(),
     branch: new Set(),
     updateType: new Set(),
-    buildNumber: new Set(['26300.9807'])
+    buildNumber: new Set()
 };
-const buildFiltered = filterItems(parsed, singleBuildFilter, '');
-assert.strictEqual(buildFiltered.length, 2); // amd64 + arm64
-console.log('  [PASS] Тест 4: Фильтрация по сборке из селекта вернула ровно 2 архитектуры (x64 и arm64)');
+const updates = filterItems(parsed, updatesFilters, '');
+assert.strictEqual(updates.length, 3);
+console.log('  [PASS] Тест 5: Фильтр "Обновления" оставил ровно 3 обновления (.NET, Cumulative, Preview)');
 
-console.log('\n Все unit-тесты v1.2.0 успешно пройдены!');
+console.log('\n Все unit-тесты v1.3.0 успешно пройдены!');

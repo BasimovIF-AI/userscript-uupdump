@@ -11,7 +11,7 @@
 
 ### Измеримые KPI
 1. **Zero Latency Filtering:** Время реакции интерфейса при переключении любого фильтра или вводе поискового запроса < 15 мс (для списков до 1000 строк).
-2. **100% точность классификации:** Корректное выделение семейства ОС (Windows 11, Windows 10, Server, Cloud PC), архитектуры (x64, arm64, x86), ветки (rs_prerelease, rs_flight и др.), номеров сборок (Build Number / Revision) и типа сборки (включая обособление .NET Framework Update, Cumulative, Feature, Preview, Insider).
+2. **100% точность классификации:** Корректное выделение категории пакета («Полные сборки» vs «Обновления»), семейства ОС (Windows 11, Windows 10, Server, Cloud PC), архитектуры (x64, arm64, x86), ветки (rs_prerelease, rs_flight и др.), номеров сборок (Build Number / Revision) и типа сборки (включая обособление .NET Framework Update, Cumulative, Feature, Preview, Insider).
 3. **Бесшовный визуал (Semantic UI Native):** Использование встроенных в UUP dump классов Semantic UI для идеальной интеграции без конфликтов тем оформления (Light/Dark).
 4. **Чистый DOM и реактивность:** Корректное скрытие/отображение строк (`display: none` / `table-row`). Динамический пересчет счетчиков фасетов и блокировка (`disabled`) опций, дающих 0 совпадений.
 
@@ -32,7 +32,7 @@ node --check uupdump-dynamic-filter.user.js
 node test_filter_engine.js
 
 # 3. Полный цикл верификации и архивации релиза
-powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.2.0"
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.3.0"
 ```
 
 Все артефакты версионированных архивов исходников создаются в каталоге `archives/` в формате `uupdump-dynamic-filter_v<MAJOR.MINOR.PATCH>_src.zip`.
@@ -42,17 +42,17 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.2.0"
 ## 3. АРХИТЕКТУРНЫЕ ПРАВИЛА И ИНВАРИАНТЫ
 
 1. **Изолированный движок парсинга:**
-   - Вся логика извлечения атрибутов (`parseRow`, `normalizeArch`, `detectOS`, `detectVersion`, `detectBranch`, `detectType`, `detectBuildNumber`) чистая и детерминированная.
+   - Вся логика извлечения атрибутов (`parseRow`, `detectPackageCategory`, `normalizeArch`, `detectOS`, `detectVersion`, `detectBranch`, `detectType`, `detectBuildNumber`) чистая и детерминированная.
    - Любые изменения в алгоритмах распознавания обязаны сопровождаться соответствующими тестовыми случаями в [`test_filter_engine.js`](file:///e:/Ильгиз/Documents/VibeCoding/TM_Scripts/userscript-uupdump/test_filter_engine.js).
-2. **Динамический сбор фасетов и контекстный пересчет:**
+2. **Приоритет группы «Категория»:**
+   - Первой строкой панели фильтров всегда располагается группа «Категория» («Полные сборки» / «Обновления»).
+3. **Динамический сбор фасетов и контекстный пересчет:**
    - Список кнопок-чипов и выпадающий список формируются динамически на основе **фактически загруженных** строк.
    - При переключении любого фильтра счетчики оставшихся категорий пересчитываются (`computeDynamicFacetCounts`), а чипы с 0 элементов становятся `disabled` и некликабельными.
-3. **Логика фильтрации:**
-   - Между группами категорий (`arch`, `os`, `version`, `branch`, `updateType`, `buildNumber`) применяется логическое **И (AND)**.
+4. **Логика фильтрации:**
+   - Между группами категорий (`packageCategory`, `arch`, `os`, `version`, `branch`, `updateType`, `buildNumber`) применяется логическое **И (AND)**.
    - Внутри одной категории чипов применяется логическое **ИЛИ (OR)**.
    - Выпадающий список «Сборка (Build)» выбирает целевую ревизию либо «Все сборки».
-4. **Сортировка фасета сборок:**
-   - Элементы выпадающего списка `buildNumber` сортируются численно по убыванию ревизий (более свежие сборки первыми).
 
 ---
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.2.0
+// @version      1.3.0
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -80,6 +80,14 @@
         return alt ? alt[1].toLowerCase() : null;
     }
 
+    function detectPackageCategory(title) {
+        // Разделение между апдейтами и полными установочными сборками
+        if (/\.NET Framework|Cumulative Update|Preview Update for|Security Update|Dynamic Update|\bKB\d{6,8}\b/i.test(title)) {
+            return 'Обновления';
+        }
+        return 'Полные сборки';
+    }
+
     function detectType(title) {
         if (/\.NET Framework/i.test(title)) return '.NET Framework Update';
         if (/Insider Preview/i.test(title)) return 'Insider Preview';
@@ -111,6 +119,7 @@
         const buildNumber = detectBuildNumber(title);
         const version = detectVersion(title, buildNumber);
         const branch = detectBranch(title);
+        const packageCategory = detectPackageCategory(title);
         const updateType = detectType(title);
         const uuid = extractUuid(link);
 
@@ -120,6 +129,7 @@
             os,
             version || '',
             branch || '',
+            packageCategory,
             updateType,
             buildNumber,
             uuid
@@ -135,6 +145,7 @@
             os,
             version,
             branch,
+            packageCategory,
             updateType,
             buildNumber,
             searchableText
@@ -144,9 +155,12 @@
     // -------------------------------------------------------------
     // МОДУЛЬ 2: СОСТОЯНИЕ И ДВИЖОК ФИЛЬТРАЦИИ
     // -------------------------------------------------------------
+    const CATEGORIES = ['packageCategory', 'arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
+
     const state = {
         items: [],
         filters: {
+            packageCategory: new Set(),
             arch: new Set(),
             os: new Set(),
             version: new Set(),
@@ -160,8 +174,7 @@
     };
 
     function matchesItem(item, filters, queryTokens, categoryToIgnore = null) {
-        const categories = ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
-        for (const cat of categories) {
+        for (const cat of CATEGORIES) {
             if (cat === categoryToIgnore) continue;
             const set = filters[cat];
             if (set && set.size > 0) {
@@ -180,18 +193,12 @@
 
     function computeDynamicFacetCounts() {
         const queryTokens = state.searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
-        const dynamicStats = {
-            arch: new Map(),
-            os: new Map(),
-            version: new Map(),
-            branch: new Map(),
-            updateType: new Map(),
-            buildNumber: new Map()
-        };
+        const dynamicStats = {};
+        CATEGORIES.forEach(cat => {
+            dynamicStats[cat] = new Map();
+        });
 
-        const categories = ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
-
-        categories.forEach(cat => {
+        CATEGORIES.forEach(cat => {
             state.items.forEach(item => {
                 if (matchesItem(item, state.filters, queryTokens, cat)) {
                     const val = item[cat];
@@ -230,7 +237,7 @@
 
         const dynamicStats = computeDynamicFacetCounts();
 
-        // 1. Обновление чипов (Архитектура, ОС, Релиз, Ветка, Тип)
+        // 1. Обновление чипов (Категория, Архитектура, ОС, Релиз, Ветка, Тип)
         const chips = state.panelEl.querySelectorAll('.uup-filter-chip');
         chips.forEach(chip => {
             const category = chip.getAttribute('data-category');
@@ -283,7 +290,6 @@
             options.forEach(opt => {
                 const bVal = opt.value;
                 if (!bVal) {
-                    // Опция "Все сборки"
                     return;
                 }
                 const bCount = dynamicStats.buildNumber?.get(bVal) || 0;
@@ -332,22 +338,18 @@
     // МОДУЛЬ 3: ГЕНЕРАТОР ПОЛЬЗОВАТЕЛЬСКОГО ИНТЕРФЕЙСА (UI)
     // -------------------------------------------------------------
     function collectInitialStats() {
-        const stats = {
-            arch: new Map(),
-            os: new Map(),
-            version: new Map(),
-            branch: new Map(),
-            updateType: new Map(),
-            buildNumber: new Map()
-        };
+        const stats = {};
+        CATEGORIES.forEach(cat => {
+            stats[cat] = new Map();
+        });
 
         state.items.forEach(item => {
-            if (item.arch) stats.arch.set(item.arch, (stats.arch.get(item.arch) || 0) + 1);
-            if (item.os) stats.os.set(item.os, (stats.os.get(item.os) || 0) + 1);
-            if (item.version) stats.version.set(item.version, (stats.version.get(item.version) || 0) + 1);
-            if (item.branch) stats.branch.set(item.branch, (stats.branch.get(item.branch) || 0) + 1);
-            if (item.updateType) stats.updateType.set(item.updateType, (stats.updateType.get(item.updateType) || 0) + 1);
-            if (item.buildNumber) stats.buildNumber.set(item.buildNumber, (stats.buildNumber.get(item.buildNumber) || 0) + 1);
+            CATEGORIES.forEach(cat => {
+                const val = item[cat];
+                if (val) {
+                    stats[cat].set(val, (stats[cat].get(val) || 0) + 1);
+                }
+            });
         });
 
         return stats;
@@ -593,28 +595,37 @@
         headerBar.appendChild(actionsDiv);
         panel.appendChild(headerBar);
 
-        // 2. Группы фильтров (строго при наличии элементов в категории)
+        // 2. Группы фильтров
         const groupsContainer = document.createElement('div');
         groupsContainer.style.display = 'flex';
         groupsContainer.style.flexDirection = 'column';
         groupsContainer.style.gap = '4px';
 
+        // ПУНКТ 1 (САМЫЙ ВЕРХНИЙ): Разделение между полными сборками и обновлениями
+        const gCategory = createChipGroup('Категория', 'fa-solid fa-layer-group', 'packageCategory', initialStats.packageCategory);
+        if (gCategory) groupsContainer.appendChild(gCategory);
+
+        // ПУНКТ 2: Архитектура
         const gArch = createChipGroup('Архитектура', 'fa-solid fa-microchip', 'arch', initialStats.arch);
         if (gArch) groupsContainer.appendChild(gArch);
 
+        // ПУНКТ 3: Операционная система
         const gOS = createChipGroup('Операционная система', 'fa-brands fa-microsoft', 'os', initialStats.os);
         if (gOS) groupsContainer.appendChild(gOS);
 
+        // ПУНКТ 4: Версия / Релиз
         const gVersion = createChipGroup('Версия / Релиз', 'fa-solid fa-tag', 'version', initialStats.version);
         if (gVersion) groupsContainer.appendChild(gVersion);
 
+        // ПУНКТ 5: Ветка разработки
         const gBranch = createChipGroup('Ветка разработки', 'fa-solid fa-code-branch', 'branch', initialStats.branch);
         if (gBranch) groupsContainer.appendChild(gBranch);
 
+        // ПУНКТ 6: Тип сборки (Standard Build, .NET Framework, Cumulative, Preview)
         const gType = createChipGroup('Тип сборки', 'fa-solid fa-box-archive', 'updateType', initialStats.updateType);
         if (gType) groupsContainer.appendChild(gType);
 
-        // Группа «Сборка (Build)» в виде выпадающего списка
+        // ПУНКТ 7: Сборка (Build) в виде выпадающего списка
         const gBuild = createDropdownGroup('Сборка (Build)', 'fa-solid fa-code-commit', 'buildNumber', initialStats.buildNumber);
         if (gBuild) groupsContainer.appendChild(gBuild);
 
