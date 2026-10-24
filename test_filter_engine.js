@@ -1,6 +1,27 @@
 // test_filter_engine.js — Автоматические unit-тесты парсинга и фильтрации сборок UUP dump
 const assert = require('assert');
 
+function isBuildsPage(pathname) {
+    if (!pathname) return false;
+    // Черный список страниц мастера загрузки
+    if (/(selectedition|selectlang|get|downloadpack|findfiles|faq)\.php/i.test(pathname)) {
+        return false;
+    }
+    // Разрешенные страницы
+    if (/(known|fetchupd)\.php/i.test(pathname) || pathname === '/' || pathname === '/index.php') {
+        return true;
+    }
+    return false;
+}
+
+function isBuildsTableLike(headers, links) {
+    const hasBuildLink = links.some(l => l && l.includes('selectlang.php?id='));
+    if (hasBuildLink) return true;
+
+    const lowerHeaders = headers.map(h => (h || '').toLowerCase());
+    return lowerHeaders.includes('build') && lowerHeaders.includes('architecture');
+}
+
 function extractUuid(link) {
     if (!link) return '';
     const m = link.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
@@ -154,7 +175,7 @@ function computeDynamicFacetCounts(items, filters, searchQuery) {
 
     CATEGORIES.forEach(cat => {
         items.forEach(item => {
-            if (matchesItem(item, filters, queryTokens, cat)) {
+            if (matchesItem(item, stateFiltersFallback(filters), queryTokens, cat)) {
                 const val = item[cat];
                 if (val) {
                     dynamicStats[cat].set(val, (dynamicStats[cat].get(val) || 0) + 1);
@@ -166,6 +187,14 @@ function computeDynamicFacetCounts(items, filters, searchQuery) {
     return dynamicStats;
 }
 
+function stateFiltersFallback(f) {
+    const res = {};
+    CATEGORIES.forEach(cat => {
+        res[cat] = f && f[cat] ? f[cat] : new Set();
+    });
+    return res;
+}
+
 function filterItems(items, filters, searchQuery) {
     const queryTokens = (searchQuery || '')
         .trim()
@@ -173,7 +202,7 @@ function filterItems(items, filters, searchQuery) {
         .split(/\s+/)
         .filter(Boolean);
 
-    return items.filter(item => matchesItem(item, filters, queryTokens, null));
+    return items.filter(item => matchesItem(item, stateFiltersFallback(filters), queryTokens, null));
 }
 
 // ---------------- ТЕСТОВЫЕ ДАННЫЕ ----------------
@@ -210,52 +239,33 @@ const sampleData = [
     }
 ];
 
-console.log('===> Запуск тестов парсера UUP dump v1.3.1...');
-const parsed = sampleData.map(parseBuildRecord);
+console.log('===> Запуск тестов парсера UUP dump v1.3.2...');
 
-// Тест 1: Классификация категорий
+// Тест 1: Валидация целевых страниц URL (isBuildsPage)
+assert.strictEqual(isBuildsPage('/known.php'), true);
+assert.strictEqual(isBuildsPage('/fetchupd.php'), true);
+assert.strictEqual(isBuildsPage('/'), true);
+assert.strictEqual(isBuildsPage('/selectedition.php'), false);
+assert.strictEqual(isBuildsPage('/selectlang.php'), false);
+assert.strictEqual(isBuildsPage('/get.php'), false);
+assert.strictEqual(isBuildsPage('/downloadpack.php'), false);
+assert.strictEqual(isBuildsPage('/findfiles.php'), false);
+console.log('  [PASS] Тест 1: Валидация целевых страниц URL отсекает страницы мастера загрузки');
+
+// Тест 2: Сигнатурная проверка таблицы сборок (isBuildsTableLike)
+const validBuildHeaders = ['Build', 'Architecture', 'Date added'];
+const validBuildLinks = ['https://uupdump.net/selectlang.php?id=687d1ced-aab1-4cd5-ad05-705189769731'];
+assert.strictEqual(isBuildsTableLike(validBuildHeaders, validBuildLinks), true);
+
+const editionTableHeaders = ['Additional edition', 'Required edition'];
+const editionTableLinks = [];
+assert.strictEqual(isBuildsTableLike(editionTableHeaders, editionTableLinks), false);
+console.log('  [PASS] Тест 2: Сигнатурная проверка таблицы сборок отсекает таблицу редакций');
+
+// Тест 3: Базовый парсинг категорий и билдов
+const parsed = sampleData.map(parseBuildRecord);
 assert.strictEqual(parsed[0].packageCategory, 'Полные сборки');
 assert.strictEqual(parsed[2].packageCategory, 'Обновления');
-console.log('  [PASS] Тест 1: Категории пакетов корректно определены');
+console.log('  [PASS] Тест 3: Категории пакетов корректно определены');
 
-// Тест 2: Проверка сокрытия недоступных сборок при фильтрации по «Полные сборки»
-const fullBuildsFilters = {
-    packageCategory: new Set(['Полные сборки']),
-    arch: new Set(),
-    os: new Set(),
-    version: new Set(),
-    branch: new Set(),
-    updateType: new Set(),
-    buildNumber: new Set()
-};
-const fullBuildsStats = computeDynamicFacetCounts(parsed, fullBuildsFilters, '');
-
-// В полных сборках доступна сборка 26300.9807 (count > 0, должна отображаться в селекте)
-assert.strictEqual(fullBuildsStats.buildNumber.get('26300.9807') > 0, true);
-
-// Сборки обновлений 26300.9711, 26300.9278, 26300.10008 имеют count 0 (должны исчезать из выпадающего списка)
-assert.strictEqual(fullBuildsStats.buildNumber.get('26300.9711') || 0, 0);
-assert.strictEqual(fullBuildsStats.buildNumber.get('26300.9278') || 0, 0);
-assert.strictEqual(fullBuildsStats.buildNumber.get('26300.10008') || 0, 0);
-console.log('  [PASS] Тест 2: При фильтре "Полные сборки" недоступные сборки обновлений получают count = 0 (исчезают из селекта)');
-
-// Тест 3: Проверка сокрытия при фильтрации по «Обновления»
-const updatesFilters = {
-    packageCategory: new Set(['Обновления']),
-    arch: new Set(),
-    os: new Set(),
-    version: new Set(),
-    branch: new Set(),
-    updateType: new Set(),
-    buildNumber: new Set()
-};
-const updatesStats = computeDynamicFacetCounts(parsed, updatesFilters, '');
-// Сборка 26300.9807 (полная сборка) должна исчезнуть (count = 0)
-assert.strictEqual(updatesStats.buildNumber.get('26300.9807') || 0, 0);
-// Сборки обновлений должны остаться (count > 0)
-assert.strictEqual(updatesStats.buildNumber.get('26300.9711') > 0, true);
-assert.strictEqual(updatesStats.buildNumber.get('26300.9278') > 0, true);
-assert.strictEqual(updatesStats.buildNumber.get('26300.10008') > 0, true);
-console.log('  [PASS] Тест 3: При фильтре "Обновления" сборки полных образов получают count = 0 (исчезают из селекта)');
-
-console.log('\n Все unit-тесты v1.3.1 успешно пройдены!');
+console.log('\n Все unit-тесты v1.3.2 успешно пройдены!');

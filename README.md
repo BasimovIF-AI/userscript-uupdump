@@ -6,6 +6,7 @@
 
 ## 🚀 Возможности
 
+- 🛡️ **Строгая изоляция страниц:** скрипт активируется **исключительно на страницах каталога сборок** (`known.php`, `fetchupd.php`, поиск) и автоматически исключен из страниц визарда скачивания (`selectedition.php`, `selectlang.php`, `get.php` и др.).
 - 🏷️ **Динамические фасетные фильтры:** автоматически парсит текущую страницу и генерирует чипы только по реально присутствующим данным:
   - **Категория (Пункт №1):** мгновенное разделение на **«Полные сборки»** (установочные образы ОС Windows для создания ISO) и **«Обновления»** (накопительные пакеты, .NET Framework, Preview патчи).
   - **Архитектура:** `x64`, `arm64`, `x86` с бейджами точного количества сборок.
@@ -49,10 +50,10 @@ node --check uupdump-dynamic-filter.user.js
 node test_filter_engine.js
 
 # Сборка релизного архива исходников:
-powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.3.1"
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.3.2"
 ```
 
-Собранный архив сохраняется в каталоге `archives/uupdump-dynamic-filter_v1.3.1_src.zip`.
+Собранный архив сохраняется в каталоге `archives/uupdump-dynamic-filter_v1.3.2_src.zip`.
 
 ---
 

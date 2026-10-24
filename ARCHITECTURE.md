@@ -8,7 +8,14 @@
 
 ```mermaid
 flowchart TD
-    DOM["DOM страницы uupdump.net (table.ui.table)"] --> Scanner["Инициализация и парсер (init / parseRow)"]
+    URL["URL страницы (window.location.pathname)"] --> PageGuard{"Проверка страницы (isBuildsPage)"}
+    PageGuard -- "Нет (selectedition.php, etc.)" --> Abort["Выход / удаление панели"]
+    PageGuard -- "Да (known.php, fetchupd.php, etc.)" --> DOMTable["Поиск таблиц в DOM"]
+    
+    DOMTable --> TableGuard{"Сигнатура таблицы (isBuildsTable)"}
+    TableGuard -- "Нет (таблица редакций/языков)" --> Abort
+    TableGuard -- "Да (таблица сборок)" --> Scanner["Инициализация и парсер (init / parseRow)"]
+    
     Scanner --> State["Внутреннее состояние (state.items)"]
     State --> Facets["Агрегатор фасетов (collectInitialStats)"]
     Facets --> UI["Рендеринг панели фильтров (renderFilterPanel)"]
@@ -20,12 +27,16 @@ flowchart TD
     DynamicRecalc --> ControlState["Обновление бейджей, блокировка пустых чипов и скрытие недоступных option (updateFacetControls)"]
     
     DOMChange["Динамическое изменение DOM (AJAX / пагинация)"] --> MutationObserver["MutationObserver"]
-    MutationObserver --> Scanner
+    MutationObserver --> PageGuard
 ```
 
 ---
 
 ## 2. Структура модулей и зоны ответственности
+
+### 2.0. Page & Table Guard Module (`isBuildsPage`, `isBuildsTable`)
+- **Ответственность:** Защита от ложных срабатываний скрипта на страницах визарда загрузки (`selectedition.php`, `selectlang.php`, `get.php`, `downloadpack.php`, `findfiles.php`).
+- **Логика:** Проверка белого списка путей URL и обязательное наличие в таблице ссылок на переход к сборкам (`selectlang.php?id=`).
 
 ### 2.1. Parser Module (`parseRow`, `detectPackageCategory`, `normalizeArch`, `detectOS`, `detectBranch`, `detectType`, `detectBuildNumber`, `detectVersion`)
 - **Ответственность:** Извлечение чистых структурированных метаданных из HTML-элементов `tr` и `td`.

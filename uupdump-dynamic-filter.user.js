@@ -1,11 +1,17 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.3.1
+// @version      1.3.2
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
 // @match        http://uupdump.net/*
+// @exclude      *://uupdump.net/selectedition.php*
+// @exclude      *://uupdump.net/selectlang.php*
+// @exclude      *://uupdump.net/get.php*
+// @exclude      *://uupdump.net/downloadpack.php*
+// @exclude      *://uupdump.net/findfiles.php*
+// @exclude      *://uupdump.net/faq.php*
 // @icon         https://uupdump.net/static/uupdump/1.2.0/img/logo.svg
 // @run-at       document-end
 // @grant        none
@@ -13,6 +19,33 @@
 
 (function () {
     'use strict';
+
+    // -------------------------------------------------------------
+    // МОДУЛЬ 0: ВАЛИДАЦИЯ ЦЕЛЕВЫХ СТРАНИЦ И ТАБЛИЦ
+    // -------------------------------------------------------------
+    function isBuildsPage(pathname) {
+        if (!pathname) return false;
+        // Черный список страниц визарда подготовки загрузки
+        if (/(selectedition|selectlang|get|downloadpack|findfiles|faq)\.php/i.test(pathname)) {
+            return false;
+        }
+        // Разрешены только страницы со списками сборок
+        if (/(known|fetchupd)\.php/i.test(pathname) || pathname === '/' || pathname === '/index.php') {
+            return true;
+        }
+        return false;
+    }
+
+    function isBuildsTable(table) {
+        if (!table) return false;
+        // Каждая строка сборок в UUP dump содержит ссылку на переход к сборке (selectlang.php?id=UUID)
+        if (table.querySelector('a[href*="selectlang.php?id="]')) {
+            return true;
+        }
+        // Дополнительная проверка структуры заголовков
+        const headers = Array.from(table.querySelectorAll('th')).map(th => th.innerText.trim().toLowerCase());
+        return headers.includes('build') && headers.includes('architecture');
+    }
 
     // -------------------------------------------------------------
     // МОДУЛЬ 1: ПАРСЕР И РАСПОЗНАВАНИЕ МЕТАДАННЫХ СБОРОК
@@ -245,7 +278,6 @@
             const isActive = state.filters[category]?.has(value);
             const count = dynamicStats[category]?.get(value) || 0;
 
-            // Обновляем бейдж с количеством
             const badge = chip.querySelector('.uup-filter-count-badge');
             if (badge) {
                 badge.textContent = count;
@@ -263,7 +295,6 @@
                 chip.classList.add('basic');
 
                 if (count === 0) {
-                    // Если элементов 0 — делаем недоступным для нажатия
                     chip.classList.add('disabled');
                     chip.disabled = true;
                     chip.style.opacity = '0.35';
@@ -292,7 +323,6 @@
             options.forEach(opt => {
                 const bVal = opt.value;
                 if (!bVal) {
-                    // Опция "Все сборки"
                     return;
                 }
                 const bCount = dynamicStats.buildNumber?.get(bVal) || 0;
@@ -308,7 +338,6 @@
                         selectedBuildBecameUnavailable = true;
                     }
                 } else {
-                    // Если доступна — показываем
                     opt.hidden = false;
                     opt.style.display = '';
                     opt.disabled = false;
@@ -316,7 +345,7 @@
                 }
             });
 
-            // Если ранее выбранная сборка стала недоступна из-за другого фильтра — сбрасываем выбор
+            // Если выбранная сборка стала недоступна из-за другого фильтра — сбрасываем выбор
             if (selectedBuildBecameUnavailable) {
                 state.filters.buildNumber.clear();
                 buildSelect.value = '';
@@ -328,7 +357,7 @@
                 defaultOpt.textContent = `Все сборки (Доступно: ${visibleBuildOptionsCount})`;
             }
 
-            // Если нет ни одной доступной сборки — скрываем всю строку группы
+            // Если доступных сборок нет — скрываем группу выпадающего списка
             if (buildGroup) {
                 buildGroup.style.display = visibleBuildOptionsCount === 0 ? 'none' : 'flex';
             }
@@ -671,7 +700,18 @@
     // МОДУЛЬ 4: ИНИЦИАЛИЗАЦИЯ И НАБЛЮДЕНИЕ ЗА DOM
     // -------------------------------------------------------------
     function init() {
-        const table = document.querySelector('table.ui.table, table.table');
+        // Проверка: страница обязана быть страницей списка сборок
+        if (!isBuildsPage(window.location.pathname)) {
+            if (state.panelEl) {
+                state.panelEl.remove();
+                state.panelEl = null;
+            }
+            return false;
+        }
+
+        // Поиск именно таблицы сборок
+        const tables = Array.from(document.querySelectorAll('table.ui.table, table.table'));
+        const table = tables.find(isBuildsTable);
         if (!table) return false;
 
         const rows = Array.from(table.querySelectorAll('tr')).filter(r => r.querySelectorAll('td').length >= 2);
@@ -691,12 +731,20 @@
         init();
     }
 
-    // Наблюдение за динамическими изменениями таблицы (например, пагинация или ajax-обновление)
+    // Наблюдение за динамическими изменениями таблицы (пагинация / ajax-обновление)
     let observerDebounce = null;
     const observer = new MutationObserver(() => {
         clearTimeout(observerDebounce);
         observerDebounce = setTimeout(() => {
-            const table = document.querySelector('table.ui.table, table.table');
+            if (!isBuildsPage(window.location.pathname)) {
+                if (state.panelEl) {
+                    state.panelEl.remove();
+                    state.panelEl = null;
+                }
+                return;
+            }
+            const tables = Array.from(document.querySelectorAll('table.ui.table, table.table'));
+            const table = tables.find(isBuildsTable);
             if (table && (!state.panelEl || !document.contains(state.panelEl))) {
                 init();
             }
