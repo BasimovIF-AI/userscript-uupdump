@@ -1,0 +1,6 @@
+# Temporary and local artifacts
+archives/*.zip
+node_modules/
+*.log
+.vscode/
+.idea/

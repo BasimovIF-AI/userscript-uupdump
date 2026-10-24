@@ -1,0 +1,59 @@
+# UUP dump Dynamic Build Filters (Userscript)
+
+Пользовательский скрипт для Tampermonkey, добавляющий панель динамических фасетных фильтров и мгновенный клиентский поиск по таблице сборок на сайте [UUP dump](https://uupdump.net/).
+
+---
+
+## 🚀 Возможности
+
+- 🏷️ **Динамические фасетные фильтры:** автоматически парсит текущую страницу и генерирует чипы только по реально присутствующим данным:
+  - **Архитектура:** `x64`, `arm64`, `x86` с бейджами точного количества сборок.
+  - **Операционная система:** `Windows 11`, `Windows 10`, `Windows Server`, `Windows CPC OS` (Cloud PC).
+  - **Версия / Релиз:** `26H2`, `24H2`, `23H2`, `22H2`, `21H2`, `1809` и др.
+  - **Ветка разработки:** `rs_prerelease`, `rs_flight`, `ge_release`, `ni_release` и др.
+  - **Тип сборки:** `Insider Preview`, `Cumulative Update`, `Feature Update`, `Standard Build`.
+- ⚡ **Мгновенная фильтрация без перезагрузки:** скрытие и показ строк осуществляются прямо в браузере за доли миллисекунды.
+- 🔍 **Живой поиск (Instant Search):** фильтрация по любому слову, номеру сборки (например, `26300`, `29695`) или части UUID.
+- 🔢 **Информационный статус:** счетчик «Показано X из Y сборок» динамически обновляется при любых манипуляциях.
+- 🎨 **Бесшовная интеграция:** используются нативные стили Semantic UI и FontAwesome, поддерживающие как светлую, так и темную тему сайта.
+- 🔄 **Кнопка сброса:** быстрое возвращение таблицы в исходное состояние в один клик.
+
+---
+
+## 📦 Быстрый старт и установка
+
+### 1. Требования
+- Браузер (Google Chrome, Microsoft Edge, Mozilla Firefox, Brave, Opera, Vivaldi).
+- Установленное расширение [Tampermonkey](https://www.tampermonkey.net/).
+
+### 2. Установка
+1. Откройте панель управления расширения **Tampermonkey** в браузере.
+2. Перейдите во вкладку **Утилиты** (Utilities) -> **Импорт из файла** (или создайте новый скрипт через `+`).
+3. Скопируйте и вставьте содержимое файла [`uupdump-dynamic-filter.user.js`](file:///e:/Ильгиз/Documents/VibeCoding/TM_Scripts/userscript-uupdump/uupdump-dynamic-filter.user.js).
+4. Сохраните скрипт (`Ctrl + S`).
+5. Перейдите на любую страницу UUP dump со списком сборок (например, [https://uupdump.net/known.php](https://uupdump.net/known.php) или поиск) — над таблицей автоматически появится интерактивная панель фильтров.
+
+---
+
+## 🛠️ Разработка и автоматизация сборки
+
+В проекте настроен автоматический пайплайн проверки и упаковки через PowerShell:
+
+```powershell
+# Запуск проверки синтаксиса и unit-тестов:
+node --check uupdump-dynamic-filter.user.js
+node test_filter_engine.js
+
+# Сборка релизного архива исходников:
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.0.0"
+```
+
+Собранный архив сохраняется в каталоге `archives/uupdump-dynamic-filter_v1.0.0_src.zip`.
+
+---
+
+## 📄 Документация проекта
+
+- [AGENTS.md](file:///e:/Ильгиз/Documents/VibeCoding/TM_Scripts/userscript-uupdump/AGENTS.md) — операционный мануал для AI и системные инварианты.
+- [ARCHITECTURE.md](file:///e:/Ильгиз/Documents/VibeCoding/TM_Scripts/userscript-uupdump/ARCHITECTURE.md) — архитектурная схема и диаграмма потоков данных.
+- [CHANGELOG.md](file:///e:/Ильгиз/Documents/VibeCoding/TM_Scripts/userscript-uupdump/CHANGELOG.md) — история версий и изменений.
