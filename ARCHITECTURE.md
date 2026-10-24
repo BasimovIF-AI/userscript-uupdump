@@ -26,27 +26,27 @@ flowchart TD
 
 ## 2. Структура модулей и зоны ответственности
 
-### 2.1. Parser Module (`parseRow`, `normalizeArch`, `detectOS`, `detectBranch`)
+### 2.1. Parser Module (`parseRow`, `normalizeArch`, `detectOS`, `detectBranch`, `detectType`, `detectBuildNumber`, `detectVersion`)
 - **Ответственность:** Извлечение чистых структурированных метаданных из HTML-элементов `tr` и `td`.
 - **Вход:** Элемент `HTMLTableRowElement`.
 - **Выход:** Нормализованный объект записи сборки:
   - `arch`: `x64` | `arm64` | `x86` | `other`
   - `os`: `Windows 11` | `Windows 10` | `Windows Server` | `Windows CPC OS` | `Other OS`
-  - `version`: `26H2` | `24H2` | `23H2` | `22H2` | `1809` и др.
+  - `version`: `26H2` | `24H2` | `23H2` | `22H2` | `1809` и др. (включая вывод по номеру сборки)
   - `branch`: `rs_prerelease` | `rs_flight` | `ge_release` и др.
-  - `updateType`: `Insider Preview` | `Cumulative Update` | `Feature Update` | `Standard Build`
-  - `buildNumber`: e.g. `26300.9807`, `29695.1001`
+  - `updateType`: `.NET Framework Update` | `Insider Preview` | `Cumulative Update` | `Preview Update` | `Feature Update` | `Standard Build`
+  - `buildNumber`: e.g. `26300.9807`, `26300.10008`
   - `uuid`: уникальный идентификатор сборки из URL
   - `searchableText`: объединенная строка в нижнем регистре для быстрого полнотекстового поиска.
 
 ### 2.2. Facet Engine (`collectFacetStats`, `createChipGroup`)
 - **Ответственность:** Агрегация уникальных значений атрибутов с подсчетом доступных сборок по каждому значению.
-- **Особенность:** Динамическое создание фасетов. На экране отображаются только те категории, которые присутствуют на текущей странице, что устраняет визуальный шум.
+- **Особенность:** Динамическое создание фасетов. Если категория пуста (`statsMap.size === 0`), соответствующая группа фильтров не выводится. Номера сборок (`buildNumber`) сортируются численно по убыванию.
 
 ### 2.3. Filter Matching Engine (`matchesFilter`, `applyFilters`)
 - **Ответственность:** Оценка каждой строки на соответствие активным фильтрам и поисковым ключевым словам.
 - **Правило логики:**
-  - `category_1 IN activeSet_1 AND category_2 IN activeSet_2 ... AND (all queryTokens in searchableText)`
+  - `category_1 IN activeSet_1 AND ... AND category_N IN activeSet_N AND (all queryTokens in searchableText)`
 - **Быстродействие:** Прямое переключение свойства `display` (`''` или `'none'`) без перестройки DOM, что гарантирует время отклика < 15 мс даже на больших таблицах.
 
 ### 2.4. UI Component (`renderFilterPanel`, `updateChipStyles`)

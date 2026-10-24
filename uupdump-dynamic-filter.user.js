@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.0.0
+// @version      1.1.0
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -40,9 +40,36 @@
         return 'Other OS';
     }
 
-    function detectVersion(title) {
+    function detectBuildNumber(title) {
+        // Извлекает номера вида 26300.9807, 26300.10008, 10.0.26300.9711
+        const mFull = title.match(/\b(?:10\.0\.)?(\d{5}(?:\.\d+)?)\b/);
+        return mFull ? mFull[1] : '';
+    }
+
+    function inferVersionFromBuild(buildStr) {
+        if (!buildStr) return null;
+        const major = parseInt(buildStr.split('.')[0], 10);
+        if (isNaN(major)) return null;
+
+        if (major >= 26300 && major < 26400) return '26H2';
+        if (major >= 26100 && major < 26300) return '24H2';
+        if (major === 22631) return '23H2';
+        if (major === 22621) return '22H2';
+        if (major === 22000) return '21H2';
+        if (major === 19045) return '22H2';
+        if (major === 19044) return '21H2';
+        if (major === 19043) return '21H1';
+        if (major === 19042) return '20H2';
+        if (major === 19041) return '2004';
+        if (major === 17763) return '1809';
+        return null;
+    }
+
+    function detectVersion(title, buildNumber) {
         const m = title.match(/\b(?:version\s+)?(2\d{1}H[12]|1\d{1}H[12]|1809|1909|1903|2004)\b/i);
-        return m ? m[1].toUpperCase() : null;
+        if (m) return m[1].toUpperCase();
+
+        return inferVersionFromBuild(buildNumber);
     }
 
     function detectBranch(title) {
@@ -54,21 +81,15 @@
     }
 
     function detectType(title) {
+        if (/\.NET Framework/i.test(title)) return '.NET Framework Update';
         if (/Insider Preview/i.test(title)) return 'Insider Preview';
         if (/Cumulative Update/i.test(title)) return 'Cumulative Update';
+        if (/Preview Update/i.test(title)) return 'Preview Update';
         if (/Feature update/i.test(title)) return 'Feature Update';
-        if (/Dynamic Update/i.test(title)) return 'Dynamic Update';
         if (/Security Update/i.test(title)) return 'Security Update';
+        if (/Dynamic Update/i.test(title)) return 'Dynamic Update';
         if (/Setup Duo/i.test(title)) return 'Setup Duo';
         return 'Standard Build';
-    }
-
-    function detectBuildNumber(title) {
-        const mFull = title.match(/\b10\.0\.(\d{5}(?:\.\d+)?)\b/);
-        if (mFull) return mFull[1];
-
-        const m = title.match(/\b(\d{5}(?:\.\d+)?)\b/);
-        return m ? m[1] : '';
     }
 
     function parseRow(tr) {
@@ -87,10 +108,10 @@
 
         const arch = normalizeArch(archRaw, title);
         const os = detectOS(title);
-        const version = detectVersion(title);
+        const buildNumber = detectBuildNumber(title);
+        const version = detectVersion(title, buildNumber);
         const branch = detectBranch(title);
         const updateType = detectType(title);
-        const buildNumber = detectBuildNumber(title);
         const uuid = extractUuid(link);
 
         const searchableText = [
@@ -130,7 +151,8 @@
             os: new Set(),
             version: new Set(),
             branch: new Set(),
-            updateType: new Set()
+            updateType: new Set(),
+            buildNumber: new Set()
         },
         searchQuery: '',
         table: null,
@@ -143,6 +165,7 @@
         if (filters.version.size > 0 && (!item.version || !filters.version.has(item.version))) return false;
         if (filters.branch.size > 0 && (!item.branch || !filters.branch.has(item.branch))) return false;
         if (filters.updateType.size > 0 && !filters.updateType.has(item.updateType)) return false;
+        if (filters.buildNumber.size > 0 && (!item.buildNumber || !filters.buildNumber.has(item.buildNumber))) return false;
 
         if (queryTokens.length > 0) {
             const hasAll = queryTokens.every(tok => item.searchableText.includes(tok));
@@ -214,7 +237,8 @@
             os: new Map(),
             version: new Map(),
             branch: new Map(),
-            updateType: new Map()
+            updateType: new Map(),
+            buildNumber: new Map()
         };
 
         state.items.forEach(item => {
@@ -223,19 +247,21 @@
             if (item.version) stats.version.set(item.version, (stats.version.get(item.version) || 0) + 1);
             if (item.branch) stats.branch.set(item.branch, (stats.branch.get(item.branch) || 0) + 1);
             if (item.updateType) stats.updateType.set(item.updateType, (stats.updateType.get(item.updateType) || 0) + 1);
+            if (item.buildNumber) stats.buildNumber.set(item.buildNumber, (stats.buildNumber.get(item.buildNumber) || 0) + 1);
         });
 
         return stats;
     }
 
-    function createChipGroup(title, iconClass, category, statsMap) {
-        if (statsMap.size === 0) return null;
+    function createChipGroup(title, iconClass, category, statsMap, isScrollable = false) {
+        // Если сборок или данных нет — группа не отображается
+        if (!statsMap || statsMap.size === 0) return null;
 
         const groupDiv = document.createElement('div');
         groupDiv.className = 'uup-filter-group';
         groupDiv.style.marginBottom = '8px';
         groupDiv.style.display = 'flex';
-        groupDiv.style.alignItems = 'center';
+        groupDiv.style.alignItems = isScrollable && statsMap.size > 8 ? 'flex-start' : 'center';
         groupDiv.style.flexWrap = 'wrap';
         groupDiv.style.gap = '6px';
 
@@ -243,6 +269,7 @@
         label.style.fontWeight = 'bold';
         label.style.fontSize = '0.9em';
         label.style.minWidth = '130px';
+        label.style.paddingTop = isScrollable && statsMap.size > 8 ? '4px' : '0';
         label.style.opacity = '0.85';
         label.innerHTML = `<i class="${iconClass}"></i> ${title}:`;
         groupDiv.appendChild(label);
@@ -251,9 +278,33 @@
         chipsWrap.style.display = 'flex';
         chipsWrap.style.flexWrap = 'wrap';
         chipsWrap.style.gap = '6px';
+        chipsWrap.style.flex = '1';
 
-        // Сортировка: по убыванию количества, затем по имени
-        const entries = Array.from(statsMap.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        // При большом количестве сборок включаем аккуратную прокрутку
+        if (isScrollable && statsMap.size > 8) {
+            chipsWrap.style.maxHeight = '74px';
+            chipsWrap.style.overflowY = 'auto';
+            chipsWrap.style.padding = '2px 4px';
+            chipsWrap.style.border = '1px solid rgba(34,36,38,.08)';
+            chipsWrap.style.borderRadius = '6px';
+            chipsWrap.style.scrollbarWidth = 'thin';
+        }
+
+        const entries = Array.from(statsMap.entries());
+
+        // Сортировка: для номеров сборок — численно по убыванию (новейшие первыми)
+        if (category === 'buildNumber') {
+            entries.sort((a, b) => {
+                const parseParts = s => s.split('.').map(n => parseInt(n, 10) || 0);
+                const [aMaj, aMin] = parseParts(a[0]);
+                const [bMaj, bMin] = parseParts(b[0]);
+                if (bMaj !== aMaj) return bMaj - aMaj;
+                return bMin - aMin;
+            });
+        } else {
+            // Для остальных категорий: по количеству сборок, затем по алфавиту
+            entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        }
 
         entries.forEach(([val, count]) => {
             const btn = document.createElement('button');
@@ -372,7 +423,7 @@
         headerBar.appendChild(actionsDiv);
         panel.appendChild(headerBar);
 
-        // 2. Группы фильтров
+        // 2. Группы фильтров (отображаются строго при наличии элементов в категории)
         const groupsContainer = document.createElement('div');
         groupsContainer.style.display = 'flex';
         groupsContainer.style.flexDirection = 'column';
@@ -392,6 +443,10 @@
 
         const gType = createChipGroup('Тип сборки', 'fa-solid fa-box-archive', 'updateType', stats.updateType);
         if (gType) groupsContainer.appendChild(gType);
+
+        // Группа сборки (Build) — с адаптивным скроллом при большом количестве сборок
+        const gBuild = createChipGroup('Сборка (Build)', 'fa-solid fa-code-commit', 'buildNumber', stats.buildNumber, true);
+        if (gBuild) groupsContainer.appendChild(gBuild);
 
         panel.appendChild(groupsContainer);
 
