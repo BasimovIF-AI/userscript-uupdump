@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.1.0
+// @version      1.2.0
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -159,15 +159,18 @@
         panelEl: null
     };
 
-    function matchesFilter(item, filters, queryTokens) {
-        if (filters.arch.size > 0 && !filters.arch.has(item.arch)) return false;
-        if (filters.os.size > 0 && !filters.os.has(item.os)) return false;
-        if (filters.version.size > 0 && (!item.version || !filters.version.has(item.version))) return false;
-        if (filters.branch.size > 0 && (!item.branch || !filters.branch.has(item.branch))) return false;
-        if (filters.updateType.size > 0 && !filters.updateType.has(item.updateType)) return false;
-        if (filters.buildNumber.size > 0 && (!item.buildNumber || !filters.buildNumber.has(item.buildNumber))) return false;
+    function matchesItem(item, filters, queryTokens, categoryToIgnore = null) {
+        const categories = ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
+        for (const cat of categories) {
+            if (cat === categoryToIgnore) continue;
+            const set = filters[cat];
+            if (set && set.size > 0) {
+                const itemVal = item[cat];
+                if (!itemVal || !set.has(itemVal)) return false;
+            }
+        }
 
-        if (queryTokens.length > 0) {
+        if (queryTokens && queryTokens.length > 0) {
             const hasAll = queryTokens.every(tok => item.searchableText.includes(tok));
             if (!hasAll) return false;
         }
@@ -175,12 +178,39 @@
         return true;
     }
 
+    function computeDynamicFacetCounts() {
+        const queryTokens = state.searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const dynamicStats = {
+            arch: new Map(),
+            os: new Map(),
+            version: new Map(),
+            branch: new Map(),
+            updateType: new Map(),
+            buildNumber: new Map()
+        };
+
+        const categories = ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
+
+        categories.forEach(cat => {
+            state.items.forEach(item => {
+                if (matchesItem(item, state.filters, queryTokens, cat)) {
+                    const val = item[cat];
+                    if (val) {
+                        dynamicStats[cat].set(val, (dynamicStats[cat].get(val) || 0) + 1);
+                    }
+                }
+            });
+        });
+
+        return dynamicStats;
+    }
+
     function applyFilters() {
         const queryTokens = state.searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
         let visibleCount = 0;
 
         state.items.forEach(item => {
-            const isVisible = matchesFilter(item, state.filters, queryTokens);
+            const isVisible = matchesItem(item, state.filters, queryTokens, null);
             item.element.style.display = isVisible ? '' : 'none';
             if (isVisible) visibleCount++;
         });
@@ -191,28 +221,93 @@
             counterEl.textContent = `${visibleCount} из ${state.items.length}`;
         }
 
-        // Обновление состояния кнопок-чипов (активность и класс цвета)
-        updateChipStyles();
+        // Динамический пересчет и обновление состояния элементов управления
+        updateFacetControls();
     }
 
-    function updateChipStyles() {
+    function updateFacetControls() {
         if (!state.panelEl) return;
+
+        const dynamicStats = computeDynamicFacetCounts();
+
+        // 1. Обновление чипов (Архитектура, ОС, Релиз, Ветка, Тип)
         const chips = state.panelEl.querySelectorAll('.uup-filter-chip');
         chips.forEach(chip => {
             const category = chip.getAttribute('data-category');
             const value = chip.getAttribute('data-value');
             const isActive = state.filters[category]?.has(value);
+            const count = dynamicStats[category]?.get(value) || 0;
+
+            // Обновляем бейдж с количеством
+            const badge = chip.querySelector('.uup-filter-count-badge');
+            if (badge) {
+                badge.textContent = count;
+            }
 
             if (isActive) {
                 chip.classList.add('active', 'blue');
-                chip.classList.remove('basic');
+                chip.classList.remove('basic', 'disabled');
+                chip.disabled = false;
+                chip.style.opacity = '1';
+                chip.style.pointerEvents = 'auto';
+                chip.style.cursor = 'pointer';
             } else {
                 chip.classList.remove('active', 'blue');
                 chip.classList.add('basic');
+
+                if (count === 0) {
+                    // Если элементов 0 — делаем недоступным для нажатия
+                    chip.classList.add('disabled');
+                    chip.disabled = true;
+                    chip.style.opacity = '0.35';
+                    chip.style.pointerEvents = 'none';
+                    chip.style.cursor = 'not-allowed';
+                } else {
+                    chip.classList.remove('disabled');
+                    chip.disabled = false;
+                    chip.style.opacity = '1';
+                    chip.style.pointerEvents = 'auto';
+                    chip.style.cursor = 'pointer';
+                }
             }
         });
 
-        // Показ или скрытие кнопки «Сбросить все»
+        // 2. Обновление выпадающего списка «Сборка (Build)»
+        const buildSelect = state.panelEl.querySelector('.uup-filter-build-select');
+        const clearBuildBtn = state.panelEl.querySelector('.uup-filter-clear-build-btn');
+
+        if (buildSelect) {
+            const options = buildSelect.querySelectorAll('option');
+            let hasActiveBuild = state.filters.buildNumber.size > 0;
+
+            options.forEach(opt => {
+                const bVal = opt.value;
+                if (!bVal) {
+                    // Опция "Все сборки"
+                    return;
+                }
+                const bCount = dynamicStats.buildNumber?.get(bVal) || 0;
+                opt.textContent = `${bVal} (${bCount})`;
+
+                if (bCount === 0 && !state.filters.buildNumber.has(bVal)) {
+                    opt.disabled = true;
+                } else {
+                    opt.disabled = false;
+                }
+            });
+
+            if (hasActiveBuild) {
+                buildSelect.style.borderColor = '#2185d0';
+                buildSelect.style.backgroundColor = 'rgba(33, 133, 208, 0.08)';
+                if (clearBuildBtn) clearBuildBtn.style.display = 'inline-block';
+            } else {
+                buildSelect.style.borderColor = 'rgba(34,36,38,.2)';
+                buildSelect.style.backgroundColor = 'var(--bg-input, rgba(255,255,255,0.9))';
+                if (clearBuildBtn) clearBuildBtn.style.display = 'none';
+            }
+        }
+
+        // 3. Показ или скрытие главной кнопки «Сбросить все»
         const hasActiveFilters = Object.values(state.filters).some(s => s.size > 0) || state.searchQuery.length > 0;
         const resetBtn = state.panelEl.querySelector('.uup-filter-reset-btn');
         if (resetBtn) {
@@ -223,15 +318,20 @@
     function resetAllFilters() {
         Object.keys(state.filters).forEach(k => state.filters[k].clear());
         state.searchQuery = '';
+
         const searchInput = state.panelEl?.querySelector('.uup-filter-search-input');
         if (searchInput) searchInput.value = '';
+
+        const buildSelect = state.panelEl?.querySelector('.uup-filter-build-select');
+        if (buildSelect) buildSelect.value = '';
+
         applyFilters();
     }
 
     // -------------------------------------------------------------
     // МОДУЛЬ 3: ГЕНЕРАТОР ПОЛЬЗОВАТЕЛЬСКОГО ИНТЕРФЕЙСА (UI)
     // -------------------------------------------------------------
-    function collectFacetStats() {
+    function collectInitialStats() {
         const stats = {
             arch: new Map(),
             os: new Map(),
@@ -253,15 +353,15 @@
         return stats;
     }
 
-    function createChipGroup(title, iconClass, category, statsMap, isScrollable = false) {
-        // Если сборок или данных нет — группа не отображается
+    function createChipGroup(title, iconClass, category, statsMap) {
+        // Если элементов нет — строка фильтров не выводится
         if (!statsMap || statsMap.size === 0) return null;
 
         const groupDiv = document.createElement('div');
         groupDiv.className = 'uup-filter-group';
         groupDiv.style.marginBottom = '8px';
         groupDiv.style.display = 'flex';
-        groupDiv.style.alignItems = isScrollable && statsMap.size > 8 ? 'flex-start' : 'center';
+        groupDiv.style.alignItems = 'center';
         groupDiv.style.flexWrap = 'wrap';
         groupDiv.style.gap = '6px';
 
@@ -269,7 +369,6 @@
         label.style.fontWeight = 'bold';
         label.style.fontSize = '0.9em';
         label.style.minWidth = '130px';
-        label.style.paddingTop = isScrollable && statsMap.size > 8 ? '4px' : '0';
         label.style.opacity = '0.85';
         label.innerHTML = `<i class="${iconClass}"></i> ${title}:`;
         groupDiv.appendChild(label);
@@ -280,31 +379,7 @@
         chipsWrap.style.gap = '6px';
         chipsWrap.style.flex = '1';
 
-        // При большом количестве сборок включаем аккуратную прокрутку
-        if (isScrollable && statsMap.size > 8) {
-            chipsWrap.style.maxHeight = '74px';
-            chipsWrap.style.overflowY = 'auto';
-            chipsWrap.style.padding = '2px 4px';
-            chipsWrap.style.border = '1px solid rgba(34,36,38,.08)';
-            chipsWrap.style.borderRadius = '6px';
-            chipsWrap.style.scrollbarWidth = 'thin';
-        }
-
-        const entries = Array.from(statsMap.entries());
-
-        // Сортировка: для номеров сборок — численно по убыванию (новейшие первыми)
-        if (category === 'buildNumber') {
-            entries.sort((a, b) => {
-                const parseParts = s => s.split('.').map(n => parseInt(n, 10) || 0);
-                const [aMaj, aMin] = parseParts(a[0]);
-                const [bMaj, bMin] = parseParts(b[0]);
-                if (bMaj !== aMaj) return bMaj - aMaj;
-                return bMin - aMin;
-            });
-        } else {
-            // Для остальных категорий: по количеству сборок, затем по алфавиту
-            entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-        }
+        const entries = Array.from(statsMap.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 
         entries.forEach(([val, count]) => {
             const btn = document.createElement('button');
@@ -316,8 +391,9 @@
             btn.style.padding = '4px 8px';
             btn.style.borderRadius = '14px';
             btn.style.cursor = 'pointer';
+            btn.style.transition = 'all 0.2s';
 
-            btn.innerHTML = `${val} <span class="ui circular label tiny" style="margin-left: 4px; padding: 2px 6px;">${count}</span>`;
+            btn.innerHTML = `${val} <span class="ui circular label tiny uup-filter-count-badge" style="margin-left: 4px; padding: 2px 6px;">${count}</span>`;
 
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -337,13 +413,107 @@
         return groupDiv;
     }
 
+    function createDropdownGroup(title, iconClass, category, statsMap) {
+        // Если сборок нет — группа с выпадающим списком не выводится
+        if (!statsMap || statsMap.size === 0) return null;
+
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'uup-filter-group';
+        groupDiv.style.marginBottom = '8px';
+        groupDiv.style.display = 'flex';
+        groupDiv.style.alignItems = 'center';
+        groupDiv.style.flexWrap = 'wrap';
+        groupDiv.style.gap = '8px';
+
+        const label = document.createElement('span');
+        label.style.fontWeight = 'bold';
+        label.style.fontSize = '0.9em';
+        label.style.minWidth = '130px';
+        label.style.opacity = '0.85';
+        label.innerHTML = `<i class="${iconClass}"></i> ${title}:`;
+        groupDiv.appendChild(label);
+
+        const selectWrap = document.createElement('div');
+        selectWrap.style.display = 'inline-flex';
+        selectWrap.style.alignItems = 'center';
+        selectWrap.style.gap = '6px';
+
+        const select = document.createElement('select');
+        select.className = 'uup-filter-build-select';
+        select.style.padding = '5px 12px';
+        select.style.borderRadius = '6px';
+        select.style.border = '1px solid rgba(34,36,38,.2)';
+        select.style.backgroundColor = 'var(--bg-input, rgba(255,255,255,0.9))';
+        select.style.color = 'inherit';
+        select.style.fontSize = '0.9em';
+        select.style.cursor = 'pointer';
+        select.style.outline = 'none';
+        select.style.minWidth = '240px';
+        select.style.transition = 'all 0.2s';
+
+        // Пункт по умолчанию
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = `Все сборки (Всего: ${state.items.length})`;
+        select.appendChild(defaultOpt);
+
+        // Сортировка сборок численно по убыванию ревизии
+        const entries = Array.from(statsMap.entries()).sort((a, b) => {
+            const parseParts = s => s.split('.').map(n => parseInt(n, 10) || 0);
+            const [aMaj, aMin] = parseParts(a[0]);
+            const [bMaj, bMin] = parseParts(b[0]);
+            if (bMaj !== aMaj) return bMaj - aMaj;
+            return bMin - aMin;
+        });
+
+        entries.forEach(([val, count]) => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = `${val} (${count})`;
+            select.appendChild(opt);
+        });
+
+        select.addEventListener('change', () => {
+            state.filters.buildNumber.clear();
+            if (select.value) {
+                state.filters.buildNumber.add(select.value);
+            }
+            applyFilters();
+        });
+
+        // Мини-кнопка сброса выбора сборки
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'ui tiny icon basic button uup-filter-clear-build-btn';
+        clearBtn.title = 'Сбросить выбор сборки';
+        clearBtn.style.display = 'none';
+        clearBtn.style.margin = '0';
+        clearBtn.style.padding = '5px 7px';
+        clearBtn.style.borderRadius = '50%';
+        clearBtn.style.cursor = 'pointer';
+        clearBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+
+        clearBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            select.value = '';
+            state.filters.buildNumber.clear();
+            applyFilters();
+        });
+
+        selectWrap.appendChild(select);
+        selectWrap.appendChild(clearBtn);
+        groupDiv.appendChild(selectWrap);
+
+        return groupDiv;
+    }
+
     function renderFilterPanel() {
         if (state.panelEl) {
             state.panelEl.remove();
             state.panelEl = null;
         }
 
-        const stats = collectFacetStats();
+        const initialStats = collectInitialStats();
 
         const panel = document.createElement('div');
         panel.id = 'uup-dynamic-filter-panel';
@@ -411,7 +581,7 @@
         searchWrap.appendChild(searchIcon);
         actionsDiv.appendChild(searchWrap);
 
-        // Кнопка сброса
+        // Кнопка сброса всех фильтров
         const resetBtn = document.createElement('button');
         resetBtn.type = 'button';
         resetBtn.className = 'ui tiny red basic button uup-filter-reset-btn';
@@ -423,29 +593,29 @@
         headerBar.appendChild(actionsDiv);
         panel.appendChild(headerBar);
 
-        // 2. Группы фильтров (отображаются строго при наличии элементов в категории)
+        // 2. Группы фильтров (строго при наличии элементов в категории)
         const groupsContainer = document.createElement('div');
         groupsContainer.style.display = 'flex';
         groupsContainer.style.flexDirection = 'column';
         groupsContainer.style.gap = '4px';
 
-        const gArch = createChipGroup('Архитектура', 'fa-solid fa-microchip', 'arch', stats.arch);
+        const gArch = createChipGroup('Архитектура', 'fa-solid fa-microchip', 'arch', initialStats.arch);
         if (gArch) groupsContainer.appendChild(gArch);
 
-        const gOS = createChipGroup('Операционная система', 'fa-brands fa-microsoft', 'os', stats.os);
+        const gOS = createChipGroup('Операционная система', 'fa-brands fa-microsoft', 'os', initialStats.os);
         if (gOS) groupsContainer.appendChild(gOS);
 
-        const gVersion = createChipGroup('Версия / Релиз', 'fa-solid fa-tag', 'version', stats.version);
+        const gVersion = createChipGroup('Версия / Релиз', 'fa-solid fa-tag', 'version', initialStats.version);
         if (gVersion) groupsContainer.appendChild(gVersion);
 
-        const gBranch = createChipGroup('Ветка разработки', 'fa-solid fa-code-branch', 'branch', stats.branch);
+        const gBranch = createChipGroup('Ветка разработки', 'fa-solid fa-code-branch', 'branch', initialStats.branch);
         if (gBranch) groupsContainer.appendChild(gBranch);
 
-        const gType = createChipGroup('Тип сборки', 'fa-solid fa-box-archive', 'updateType', stats.updateType);
+        const gType = createChipGroup('Тип сборки', 'fa-solid fa-box-archive', 'updateType', initialStats.updateType);
         if (gType) groupsContainer.appendChild(gType);
 
-        // Группа сборки (Build) — с адаптивным скроллом при большом количестве сборок
-        const gBuild = createChipGroup('Сборка (Build)', 'fa-solid fa-code-commit', 'buildNumber', stats.buildNumber, true);
+        // Группа «Сборка (Build)» в виде выпадающего списка
+        const gBuild = createDropdownGroup('Сборка (Build)', 'fa-solid fa-code-commit', 'buildNumber', initialStats.buildNumber);
         if (gBuild) groupsContainer.appendChild(gBuild);
 
         panel.appendChild(groupsContainer);
@@ -453,7 +623,7 @@
         state.panelEl = panel;
         state.table.parentElement.insertBefore(panel, state.table);
 
-        updateChipStyles();
+        updateFacetControls();
     }
 
     // -------------------------------------------------------------

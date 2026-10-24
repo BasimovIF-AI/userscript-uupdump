@@ -10,13 +10,14 @@
 flowchart TD
     DOM["DOM страницы uupdump.net (table.ui.table)"] --> Scanner["Инициализация и парсер (init / parseRow)"]
     Scanner --> State["Внутреннее состояние (state.items)"]
-    State --> Facets["Агрегатор фасетов (collectFacetStats)"]
+    State --> Facets["Агрегатор фасетов (collectInitialStats)"]
     Facets --> UI["Рендеринг панели фильтров (renderFilterPanel)"]
     
-    UserAction["Действие пользователя (клик по чипу / ввод поиска)"] --> EventHandlers["Обработчики событий"]
-    EventHandlers --> FilterEngine["Движок сопоставления (matchesFilter / applyFilters)"]
+    UserAction["Действие пользователя (клик по чипу / выбор в селекте / ввод)"] --> EventHandlers["Обработчики событий"]
+    EventHandlers --> FilterEngine["Движок сопоставления (matchesItem / applyFilters)"]
+    FilterEngine --> DynamicRecalc["Динамический пересчет счетчиков (computeDynamicFacetCounts)"]
     FilterEngine --> DOMUpdate["Мгновенное обновление DOM (style.display = '' / 'none')"]
-    FilterEngine --> BadgeUpdate["Обновление бейджей и счетчиков (X из Y сборок)"]
+    DynamicRecalc --> ControlState["Обновление бейджей и блокировка нулевых опций (updateFacetControls)"]
     
     DOMChange["Динамическое изменение DOM (AJAX / пагинация)"] --> MutationObserver["MutationObserver"]
     MutationObserver --> Scanner
@@ -28,27 +29,18 @@ flowchart TD
 
 ### 2.1. Parser Module (`parseRow`, `normalizeArch`, `detectOS`, `detectBranch`, `detectType`, `detectBuildNumber`, `detectVersion`)
 - **Ответственность:** Извлечение чистых структурированных метаданных из HTML-элементов `tr` и `td`.
-- **Вход:** Элемент `HTMLTableRowElement`.
-- **Выход:** Нормализованный объект записи сборки:
-  - `arch`: `x64` | `arm64` | `x86` | `other`
-  - `os`: `Windows 11` | `Windows 10` | `Windows Server` | `Windows CPC OS` | `Other OS`
-  - `version`: `26H2` | `24H2` | `23H2` | `22H2` | `1809` и др. (включая вывод по номеру сборки)
-  - `branch`: `rs_prerelease` | `rs_flight` | `ge_release` и др.
-  - `updateType`: `.NET Framework Update` | `Insider Preview` | `Cumulative Update` | `Preview Update` | `Feature Update` | `Standard Build`
-  - `buildNumber`: e.g. `26300.9807`, `26300.10008`
-  - `uuid`: уникальный идентификатор сборки из URL
-  - `searchableText`: объединенная строка в нижнем регистре для быстрого полнотекстового поиска.
+- **Выход:** Нормализованный объект записи сборки (`arch`, `os`, `version`, `branch`, `updateType`, `buildNumber`, `uuid`, `searchableText`).
 
-### 2.2. Facet Engine (`collectFacetStats`, `createChipGroup`)
-- **Ответственность:** Агрегация уникальных значений атрибутов с подсчетом доступных сборок по каждому значению.
-- **Особенность:** Динамическое создание фасетов. Если категория пуста (`statsMap.size === 0`), соответствующая группа фильтров не выводится. Номера сборок (`buildNumber`) сортируются численно по убыванию.
+### 2.2. Facet Engine & Dynamic Recalculation (`computeDynamicFacetCounts`, `createChipGroup`, `createDropdownGroup`)
+- **Ответственность:** Агрегация уникальных значений и динамический расчет доступного количества сборок в контексте других активных фильтров.
+- **Особенность:** Блокировка пустых чипов (`count === 0` $\rightarrow$ `disabled`, полупрозрачность и запрет клика) и автоматическое сокрытие пустых групп.
 
-### 2.3. Filter Matching Engine (`matchesFilter`, `applyFilters`)
+### 2.3. Filter Matching Engine (`matchesItem`, `applyFilters`)
 - **Ответственность:** Оценка каждой строки на соответствие активным фильтрам и поисковым ключевым словам.
 - **Правило логики:**
   - `category_1 IN activeSet_1 AND ... AND category_N IN activeSet_N AND (all queryTokens in searchableText)`
-- **Быстродействие:** Прямое переключение свойства `display` (`''` или `'none'`) без перестройки DOM, что гарантирует время отклика < 15 мс даже на больших таблицах.
 
-### 2.4. UI Component (`renderFilterPanel`, `updateChipStyles`)
-- **Ответственность:** Построение интуитивной панели над таблицей.
-- **Интеграция:** Использование классов Semantic UI (`ui segment`, `ui button`, `ui label`, `ui input`) обеспечивает полную совместимость со светлой и темной темами оформления UUP dump.
+### 2.4. UI Component (`renderFilterPanel`, `updateFacetControls`)
+- **Ответственность:** Построение интуитивной панели над таблицей:
+  - Чипы для категорий с малым набором вариантов (Архитектура, ОС, Релиз, Тип сборки).
+  - Компактный выпадающий список `<select>` для сборок (Build) с мини-кнопкой сброса `[✖]`.

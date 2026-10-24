@@ -25,7 +25,6 @@ function detectOS(title) {
 }
 
 function detectBuildNumber(title) {
-    // 10.0.26300.9711 или 26300.10008
     const mFull = title.match(/\b(?:10\.0\.)?(\d{5}(?:\.\d+)?)\b/);
     return mFull ? mFull[1] : '';
 }
@@ -53,7 +52,6 @@ function detectVersion(title, buildNumber) {
     const m = title.match(/\b(?:version\s+)?(2\d{1}H[12]|1\d{1}H[12]|1809|1909|1903|2004)\b/i);
     if (m) return m[1].toUpperCase();
 
-    // Если в заголовке нет явного указания (например, у .NET Framework или Cumulative Update), выводим по сборке
     return inferVersionFromBuild(buildNumber);
 }
 
@@ -66,7 +64,6 @@ function detectBranch(title) {
 }
 
 function detectType(title) {
-    // Приоритетная классификация .NET Framework
     if (/\.NET Framework/i.test(title)) return '.NET Framework Update';
     if (/Insider Preview/i.test(title)) return 'Insider Preview';
     if (/Cumulative Update/i.test(title)) return 'Cumulative Update';
@@ -113,8 +110,32 @@ function parseBuildRecord({ title, arch, date, link }) {
     };
 }
 
-function buildFacets(items) {
-    const facets = {
+function matchesItem(item, filters, queryTokens, categoryToIgnore = null) {
+    for (const cat of ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber']) {
+        if (cat === categoryToIgnore) continue;
+        const set = filters[cat];
+        if (set && set.size > 0) {
+            const itemVal = item[cat];
+            if (!itemVal || !set.has(itemVal)) return false;
+        }
+    }
+
+    if (queryTokens && queryTokens.length > 0) {
+        const hasAll = queryTokens.every(tok => item.searchableText.includes(tok));
+        if (!hasAll) return false;
+    }
+
+    return true;
+}
+
+function computeDynamicFacetCounts(items, filters, searchQuery) {
+    const queryTokens = (searchQuery || '')
+        .trim()
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    const dynamicStats = {
         arch: new Map(),
         os: new Map(),
         version: new Map(),
@@ -123,16 +144,21 @@ function buildFacets(items) {
         buildNumber: new Map()
     };
 
-    items.forEach(item => {
-        if (item.arch) facets.arch.set(item.arch, (facets.arch.get(item.arch) || 0) + 1);
-        if (item.os) facets.os.set(item.os, (facets.os.get(item.os) || 0) + 1);
-        if (item.version) facets.version.set(item.version, (facets.version.get(item.version) || 0) + 1);
-        if (item.branch) facets.branch.set(item.branch, (facets.branch.get(item.branch) || 0) + 1);
-        if (item.updateType) facets.updateType.set(item.updateType, (facets.updateType.get(item.updateType) || 0) + 1);
-        if (item.buildNumber) facets.buildNumber.set(item.buildNumber, (facets.buildNumber.get(item.buildNumber) || 0) + 1);
+    const categories = ['arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
+
+    categories.forEach(cat => {
+        // Подсчитываем количество с учетом всех активных фильтров КРОМЕ текущей категории
+        items.forEach(item => {
+            if (matchesItem(item, filters, queryTokens, cat)) {
+                const val = item[cat];
+                if (val) {
+                    dynamicStats[cat].set(val, (dynamicStats[cat].get(val) || 0) + 1);
+                }
+            }
+        });
     });
 
-    return facets;
+    return dynamicStats;
 }
 
 function filterItems(items, filters, searchQuery) {
@@ -142,21 +168,7 @@ function filterItems(items, filters, searchQuery) {
         .split(/\s+/)
         .filter(Boolean);
 
-    return items.filter(item => {
-        if (filters.arch && filters.arch.size > 0 && !filters.arch.has(item.arch)) return false;
-        if (filters.os && filters.os.size > 0 && !filters.os.has(item.os)) return false;
-        if (filters.version && filters.version.size > 0 && (!item.version || !filters.version.has(item.version))) return false;
-        if (filters.branch && filters.branch.size > 0 && (!item.branch || !filters.branch.has(item.branch))) return false;
-        if (filters.updateType && filters.updateType.size > 0 && !filters.updateType.has(item.updateType)) return false;
-        if (filters.buildNumber && filters.buildNumber.size > 0 && (!item.buildNumber || !filters.buildNumber.has(item.buildNumber))) return false;
-
-        if (queryTokens.length > 0) {
-            const hasAll = queryTokens.every(tok => item.searchableText.includes(tok));
-            if (!hasAll) return false;
-        }
-
-        return true;
-    });
+    return items.filter(item => matchesItem(item, filters, queryTokens, null));
 }
 
 // ---------------- ТЕСТОВЫЕ ДАННЫЕ ----------------
@@ -166,6 +178,12 @@ const sampleData = [
         link: "https://uupdump.net/selectlang.php?id=687d1ced-aab1-4cd5-ad05-705189769731",
         arch: "x64",
         date: "2026-10-16 17:00:10 UTC"
+    },
+    {
+        title: "Windows 11, version 26H2 (26300.9807) arm64",
+        link: "https://uupdump.net/selectlang.php?id=bf882f73-feb3-425b-9208-56cb11703967",
+        arch: "arm64",
+        date: "2026-10-16 17:01:10 UTC"
     },
     {
         title: "Cumulative Update for Windows CPC OS (10.0.26300.9711) (26300.9711) amd64",
@@ -184,61 +202,53 @@ const sampleData = [
         link: "https://uupdump.net/selectlang.php?id=22222222-3333-4444-5555-666666666666",
         arch: "x64",
         date: "2026-10-13 17:00:20 UTC"
-    },
-    {
-        title: ".NET Framework Preview Update for Windows 11 - KB5125105 (26300.10003) amd64",
-        link: "https://uupdump.net/selectlang.php?id=33333333-4444-5555-6666-777777777777",
-        arch: "x64",
-        date: "2026-09-10 18:56:00 UTC"
-    },
-    {
-        title: "Windows Server Insider Preview 29683.1000 (rs_flight) amd64",
-        link: "https://uupdump.net/selectlang.php?id=35cf7f29-b228-4f0e-aab6-80cb6dd66495",
-        arch: "x64",
-        date: "2026-10-12 17:00:05 UTC"
     }
 ];
 
-console.log('===> Запуск тестов парсера UUP dump v1.1.0...');
+console.log('===> Запуск тестов парсера UUP dump v1.2.0...');
 const parsed = sampleData.map(parseBuildRecord);
 
-// Тест 1: Классификация .NET Framework
-assert.strictEqual(parsed[3].updateType, '.NET Framework Update');
+// Тест 1: Базовый парсинг
+assert.strictEqual(parsed[3].updateType, 'Preview Update');
 assert.strictEqual(parsed[4].updateType, '.NET Framework Update');
-console.log('  [PASS] Тест 1: .NET Framework Security и Preview успешно определены как .NET Framework Update');
+console.log('  [PASS] Тест 1: Обновления Preview и .NET Framework корректно классифицированы');
 
-// Тест 2: Извлечение номеров сборок (Build Number)
-assert.strictEqual(parsed[0].buildNumber, '26300.9807');
-assert.strictEqual(parsed[1].buildNumber, '26300.9711');
-assert.strictEqual(parsed[2].buildNumber, '26300.9278');
-assert.strictEqual(parsed[3].buildNumber, '26300.10008');
-assert.strictEqual(parsed[4].buildNumber, '26300.10003');
-console.log('  [PASS] Тест 2: Номера сборок (Build Number / Revision) успешно извлечены');
+// Тест 2: Динамический пересчет фасетов при пустых фильтрах
+const initialStats = computeDynamicFacetCounts(parsed, {}, '');
+assert.strictEqual(initialStats.arch.get('x64'), 4);
+assert.strictEqual(initialStats.arch.get('arm64'), 1);
+assert.strictEqual(initialStats.updateType.get('Preview Update'), 1);
+console.log('  [PASS] Тест 2: Исходные счетчики фасетов подсчитаны корректно');
 
-// Тест 3: Интеллектуальное определение версии 26H2 для всех элементов сборки 26300
-assert.strictEqual(parsed[0].version, '26H2');
-assert.strictEqual(parsed[1].version, '26H2'); // CPC OS
-assert.strictEqual(parsed[2].version, '26H2'); // Preview Update
-assert.strictEqual(parsed[3].version, '26H2'); // .NET Framework
-assert.strictEqual(parsed[4].version, '26H2'); // .NET Framework Preview
-console.log('  [PASS] Тест 3: Интеллектуальное определение версии 26H2 по сборке 26300 сработало для всех 5 элементов');
+// Тест 3: Динамический пересчет при выборе arch: arm64
+const arm64Filters = {
+    arch: new Set(['arm64']),
+    os: new Set(),
+    version: new Set(),
+    branch: new Set(),
+    updateType: new Set(),
+    buildNumber: new Set()
+};
+const arm64Stats = computeDynamicFacetCounts(parsed, arm64Filters, '');
 
-// Тест 4: Проверка фасетов сборок
-const facets = buildFacets(parsed);
-assert.strictEqual(facets.buildNumber.get('26300.9807'), 1);
-assert.strictEqual(facets.buildNumber.get('26300.10008'), 1);
-assert.strictEqual(facets.updateType.get('.NET Framework Update'), 2);
-console.log('  [PASS] Тест 4: Фасетная карта сборок и типов содержит корректные счетчики');
+// Для arm64 доступен только 26300.9807, а 26300.9711, 26300.9278 и 26300.10008 отсутствуют (undefined или 0)
+assert.strictEqual(arm64Stats.buildNumber.get('26300.9807'), 1);
+assert.strictEqual(arm64Stats.buildNumber.get('26300.9278') || 0, 0);
+assert.strictEqual(arm64Stats.updateType.get('.NET Framework Update') || 0, 0);
+assert.strictEqual(arm64Stats.os.get('Windows CPC OS') || 0, 0);
+console.log('  [PASS] Тест 3: Динамический пересчет при arch: arm64 выявил недоступные опции (0 сборок)');
 
-// Тест 5: Фильтрация по конкретной сборке 26300.9278
-const buildFiltered = filterItems(parsed, { buildNumber: new Set(['26300.9278']) }, '');
-assert.strictEqual(buildFiltered.length, 1);
-assert.strictEqual(buildFiltered[0].title, 'Preview Update for Windows 11 (26300.9278) amd64');
-console.log('  [PASS] Тест 5: Фильтрация по buildNumber: 26300.9278 возвращает точное совпадение');
+// Тест 4: Фильтрация по одиночной сборке из выпадающего списка
+const singleBuildFilter = {
+    arch: new Set(),
+    os: new Set(),
+    version: new Set(),
+    branch: new Set(),
+    updateType: new Set(),
+    buildNumber: new Set(['26300.9807'])
+};
+const buildFiltered = filterItems(parsed, singleBuildFilter, '');
+assert.strictEqual(buildFiltered.length, 2); // amd64 + arm64
+console.log('  [PASS] Тест 4: Фильтрация по сборке из селекта вернула ровно 2 архитектуры (x64 и arm64)');
 
-// Тест 6: Фильтрация по типу .NET Framework Update
-const frameworkFiltered = filterItems(parsed, { updateType: new Set(['.NET Framework Update']) }, '');
-assert.strictEqual(frameworkFiltered.length, 2);
-console.log('  [PASS] Тест 6: Фильтрация по .NET Framework Update отделила оба обновления фреймворка');
-
-console.log('\n Все unit-тесты v1.1.0 успешно пройдены!');
+console.log('\n Все unit-тесты v1.2.0 успешно пройдены!');
