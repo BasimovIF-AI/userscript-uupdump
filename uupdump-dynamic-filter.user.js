@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.3.3
+// @version      1.4.0
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -71,13 +71,24 @@
         return 'other';
     }
 
-    function detectOS(title) {
+    function detectOS(title, buildNumber) {
         if (/Windows Server/i.test(title)) return 'Windows Server';
+        if (/Azure Stack/i.test(title)) return 'Azure Stack HCI';
         if (/Windows CPC OS|Cloud PC/i.test(title)) return 'Windows CPC OS';
         if (/Windows 11/i.test(title)) return 'Windows 11';
         if (/Windows 10/i.test(title)) return 'Windows 10';
-        if (/Windows Holographic/i.test(title)) return 'Holographic';
-        return 'Other OS';
+        if (/Windows Holographic/i.test(title)) return 'Windows Holographic';
+        if (/Windows Team|Surface Hub/i.test(title)) return 'Windows Team';
+        if (/\.NET Framework|Update Stack Package/i.test(title)) return 'Системные компоненты';
+
+        if (buildNumber) {
+            const major = parseInt(buildNumber.split('.')[0], 10);
+            if (!isNaN(major)) {
+                if (major >= 22000) return 'Windows 11';
+                if (major >= 10240) return 'Windows 10';
+            }
+        }
+        return 'Другая ОС';
     }
 
     function detectBuildNumber(title) {
@@ -94,36 +105,57 @@
         if (major >= 28000) return 'Future / Experimental';
         if (major >= 26300 && major < 26400) return '26H2';
         if (major >= 26100 && major < 26300) return '24H2';
+        if (major >= 25000 && major < 26100) return 'Insider (Canary/Dev)';
+        if (major >= 23400 && major < 25000) return 'Insider (Dev)';
+        if (major === 22635) return '23H2 (Beta)';
         if (major === 22631) return '23H2';
+        if (major === 22624) return '23H2 (Beta)';
+        if (major === 22623 || major === 22622) return '22H2 (Beta)';
         if (major === 22621) return '22H2';
         if (major === 22000) return '21H2';
+        if (major === 20348) return 'Server 2022';
         if (major === 19045) return '22H2';
         if (major === 19044) return '21H2';
         if (major === 19043) return '21H1';
         if (major === 19042) return '20H2';
         if (major === 19041) return '2004';
+        if (major >= 19500 && major < 20300) return 'Insider (Manganese/Iron)';
+        if (major === 18363) return '1909';
+        if (major === 18362) return '1903';
         if (major === 17763) return '1809';
+        if (major === 17134) return '1803';
+        if (major === 16299) return '1709';
+        if (major === 15063) return '1703';
+        if (major === 14393) return '1607';
+        if (major === 10586) return '1511';
+        if (major === 10240) return '1507 (RTM)';
         return null;
     }
 
     function detectVersion(title, buildNumber) {
-        const m = title.match(/\b(?:version\s+)?(2\d{1}H[12]|1\d{1}H[12]|1809|1909|1903|2004)\b/i);
+        const m = title.match(/\b(?:version\s+)?(2[0-6]H[12]|2004|1909|1903|1809|1803|1709|1703|1607|1511|1507)\b/i);
         if (m) return m[1].toUpperCase();
 
         return inferVersionFromBuild(buildNumber);
     }
 
     function detectBranch(title) {
-        const m = title.match(/\(([a-z0-9_-]+(?:release|prerelease|flight|canary|dev|beta|preview)[a-z0-9_-]*)\)/i);
-        if (m) return m[1].toLowerCase();
+        // Проверяем все круглые скобки
+        const matches = Array.from(title.matchAll(/\(([a-zA-Z0-9_\-\.]+)\)/g)).map(m => m[1]);
+        for (const m of matches) {
+            if (/^(rs_|ge_|ni_|co_|fe_|zn_|br_|mn_|vb_|19h1_|th|canary|beta|dev|main|release|preview)/i.test(m) ||
+                m.endsWith('_release') || m.endsWith('_prerelease') || m.includes('_flight') || m.includes('_svc') || m.includes('_upr')) {
+                return m.toLowerCase();
+            }
+        }
 
-        const alt = title.match(/\b(rs_prerelease|rs_flight|ge_release|ni_release|co_release|fe_release|vb_release|mn_release)\b/i);
+        const alt = title.match(/\b(rs_prerelease|rs_flight|ge_release|ni_release|co_release|fe_release|vb_release|mn_release|zn_release|br_release|19h1_release)\b/i);
         return alt ? alt[1].toLowerCase() : null;
     }
 
     function detectPackageCategory(title) {
         // Разделение между апдейтами и полными установочными сборками
-        if (/\.NET Framework|Cumulative Update|Preview Update for|Security Update|Dynamic Update|\bKB\d{6,8}\b/i.test(title)) {
+        if (/\.NET Framework|Cumulative Update|Preview Update|Security Update|Quality Update|Dynamic Update|Update Stack Package|Autopilot update|Setup Duo|\bKB\d{6,8}\b/i.test(title)) {
             return 'Обновления';
         }
         return 'Полные сборки';
@@ -131,14 +163,16 @@
 
     function detectType(title) {
         if (/\.NET Framework/i.test(title)) return '.NET Framework Update';
-        if (/Insider Preview/i.test(title)) return 'Insider Preview';
         if (/Cumulative Update/i.test(title)) return 'Cumulative Update';
         if (/Preview Update/i.test(title)) return 'Preview Update';
         if (/Feature update/i.test(title)) return 'Feature Update';
         if (/Quality Update/i.test(title)) return 'Quality Update';
         if (/Security Update/i.test(title)) return 'Security Update';
         if (/Dynamic Update/i.test(title)) return 'Dynamic Update';
+        if (/Update Stack Package/i.test(title)) return 'Update Stack Package';
+        if (/Autopilot update/i.test(title)) return 'Autopilot Update';
         if (/Setup Duo/i.test(title)) return 'Setup Duo';
+        if (/Insider Preview/i.test(title)) return 'Insider Preview';
         return 'Standard Build';
     }
 
@@ -157,8 +191,8 @@
         const date = dateCol ? dateCol.innerText.trim() : '';
 
         const arch = normalizeArch(archRaw, title);
-        const os = detectOS(title);
         const buildNumber = detectBuildNumber(title);
+        const os = detectOS(title, buildNumber);
         const version = detectVersion(title, buildNumber);
         const branch = detectBranch(title);
         const packageCategory = detectPackageCategory(title);
@@ -450,7 +484,42 @@
         chipsWrap.style.gap = '6px';
         chipsWrap.style.flex = '1';
 
-        const entries = Array.from(statsMap.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        const entries = Array.from(statsMap.entries());
+
+        if (category === 'packageCategory') {
+            const order = ['Полные сборки', 'Обновления'];
+            entries.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+        } else if (category === 'arch') {
+            const order = ['x64', 'arm64', 'x86', 'other'];
+            entries.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+        } else if (category === 'os') {
+            const order = ['Windows 11', 'Windows 10', 'Windows Server', 'Azure Stack HCI', 'Windows CPC OS', 'Windows Holographic', 'Windows Team', 'Системные компоненты'];
+            entries.sort((a, b) => {
+                const idxA = order.indexOf(a[0]);
+                const idxB = order.indexOf(b[0]);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return b[1] - a[1];
+            });
+        } else if (category === 'version') {
+            const verOrder = [
+                'Future / Experimental', '26H2', '24H2', '23H2', '23H2 (Beta)', '22H2', '22H2 (Beta)', '21H2',
+                'Server 2025', 'Server 2022', 'Server 2019', 'Server 2016',
+                '21H1', '20H2', '2004', '1909', '1903', '1809', '1803', '1709', '1703', '1607', '1511', '1507 (RTM)',
+                'Insider (Canary/Dev)', 'Insider (Dev)', 'Insider (Manganese/Iron)'
+            ];
+            entries.sort((a, b) => {
+                const idxA = verOrder.indexOf(a[0]);
+                const idxB = verOrder.indexOf(b[0]);
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+                return b[1] - a[1];
+            });
+        } else {
+            entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        }
 
         entries.forEach(([val, count]) => {
             const btn = document.createElement('button');

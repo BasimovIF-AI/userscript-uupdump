@@ -1,6 +1,6 @@
 ﻿# build.ps1 — Скрипт автоматизации сборки и верификации
 param(
-    [string]$Version = "1.3.3"
+    [string]$Version = "1.4.0"
 )
 
 $ErrorActionPreference = "Stop"

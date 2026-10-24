@@ -10,10 +10,10 @@
 - 🏷️ **Динамические фасетные фильтры:** автоматически парсит текущую страницу и генерирует чипы только по реально присутствующим данным:
   - **Категория (Пункт №1):** мгновенное разделение на **«Полные сборки»** (установочные образы ОС Windows для создания ISO) и **«Обновления»** (накопительные пакеты, .NET Framework, Preview патчи).
   - **Архитектура:** `x64`, `arm64`, `x86` с бейджами точного количества сборок.
-  - **Операционная система:** `Windows 11`, `Windows 10`, `Windows Server`, `Windows CPC OS` (Cloud PC).
-  - **Версия / Релиз:** `26H2`, `24H2`, `23H2`, `22H2`, `21H2`, `1809` и др. (включая интеллектуальное сопоставление по номеру сборки).
-  - **Ветка разработки:** `rs_prerelease`, `rs_flight`, `ge_release`, `ni_release` и др.
-  - **Тип сборки:** `Standard Build`, `.NET Framework Update`, `Cumulative Update`, `Preview Update`, `Insider Preview`, `Feature Update`.
+  - **Операционная система:** `Windows 11`, `Windows 10`, `Windows Server`, `Azure Stack HCI`, `Windows CPC OS` (Cloud PC), `Windows Holographic`, `Windows Team`, `Системные компоненты`.
+  - **Версия / Релиз:** `26H2`, `24H2`, `23H2`, `22H2`, `21H2`, `1809`, каналы Insider Canary/Dev/Beta и др. (включая интеллектуальное сопоставление по номеру сборки).
+  - **Ветка разработки:** `rs_prerelease`, `rs_flight`, `ge_release`, `ni_release`, `co_release`, `zn_release`, `br_release`, `vb_release` и др. (с автоматической фильтрацией ложных версий из скобок).
+  - **Тип сборки:** `Standard Build`, `.NET Framework Update`, `Cumulative Update`, `Preview Update`, `Insider Preview`, `Feature Update`, `Update Stack Package`, `Security Update`, `Quality Update`, `Autopilot Update`.
   - **Сборка (Build):** компактный выпадающий список (`<select>`), из которого **автоматически скрываются недоступные опции (0 сборок)**.
 - 🔄 **Интеллектуальный динамический пересчет:** при выборе любого фильтра количество сборок во всех остальных категориях немедленно пересчитывается.
 - 🚫 **Блокировка пустых опций:** если для кнопки количество доступных сборок падает до 0, чип отключается (`disabled`) и блокируется, а в выпадающем списке неактивные сборки полностью скрываются.
@@ -50,10 +50,10 @@ node --check uupdump-dynamic-filter.user.js
 node test_filter_engine.js
 
 # Сборка релизного архива исходников:
-powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.3.3"
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.4.0"
 ```
 
-Собранный архив сохраняется в каталоге `archives/uupdump-dynamic-filter_v1.3.3_src.zip`.
+Собранный архив сохраняется в каталоге `archives/uupdump-dynamic-filter_v1.4.0_src.zip`.
 
 ---
 

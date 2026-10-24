@@ -33,7 +33,7 @@ node --check uupdump-dynamic-filter.user.js
 node test_filter_engine.js
 
 # 3. Полный цикл верификации и архивации релиза
-powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.3.3"
+powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.4.0"
 ```
 
 Все артефакты версионированных архивов исходников создаются в каталоге `archives/` в формате `uupdump-dynamic-filter_v<MAJOR.MINOR.PATCH>_src.zip`.
@@ -66,3 +66,5 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1 -Version "1.3.3"
    - На главной странице (`/` и `/index.php`) блок быстрых опций `.home-quick-options` явно отсекается, а панель привязывается исключительно к таблице «Recently added builds», содержащей реальные ссылки `selectlang.php?id=`.
 3. **Поддержка MutationObserver:**
    - UUP dump может обновлять содержимое контейнеров через пагинацию или частичные динамические вставки. `MutationObserver` с дебаунсом 300 мс следит за наличием панели и корректно переинициализирует фильтры, если таблица была пересоздана.
+4. **Разрешение коллизий в скобках (Ветки vs Версии):**
+   - В накопительных обновлениях серверов встречаются конструкции вида `(1809) (17763.1)`. Движок фильтрации строго отсекает номера версий и сборок из категории «Ветка разработки», пропуская в ветки только аутентичные кодовые имена Microsoft (`rs_`, `ge_`, `ni_`, `co_`, `fe_`, `zn_`, `br_`, `mn_`, `vb_`, `19h1_` и суффиксы `_release`, `_prerelease`, `_flight`).

@@ -43,10 +43,10 @@ flowchart TD
 - **Выход:** Нормализованный объект записи сборки:
   - `packageCategory`: `'Полные сборки'` | `'Обновления'`
   - `arch`: `x64` | `arm64` | `x86` | `other`
-  - `os`: `Windows 11` | `Windows 10` | `Windows Server` | `Windows CPC OS` | `Other OS`
-  - `version`: `26H2` | `24H2` | `23H2` | `22H2` | `1809` и др.
-  - `branch`: `rs_prerelease` | `rs_flight` | `ge_release` и др.
-  - `updateType`: `Standard Build` | `.NET Framework Update` | `Cumulative Update` | `Preview Update` | `Feature Update`
+  - `os`: `Windows 11` | `Windows 10` | `Windows Server` | `Azure Stack HCI` | `Windows CPC OS` | `Windows Holographic` | `Windows Team` | `Системные компоненты`
+  - `version`: `Future / Experimental` | `26H2` | `24H2` | `23H2` | `22H2` | `21H2` | `20H2` | `1809` | `Insider Canary/Dev/Beta` и др.
+  - `branch`: `rs_prerelease` | `ge_release` | `ni_release` | `co_release` | `zn_release` | `br_release` и др.
+  - `updateType`: `Standard Build` | `.NET Framework Update` | `Cumulative Update` | `Preview Update` | `Feature Update` | `Update Stack Package` | `Security Update` | `Quality Update` | `Autopilot Update`
   - `buildNumber`: e.g. `26300.9807`, `26300.10008`
   - `uuid`: уникальный идентификатор сборки из URL
   - `searchableText`: объединенная строка в нижнем регистре для быстрого полнотекстового поиска.
