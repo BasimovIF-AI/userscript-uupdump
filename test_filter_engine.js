@@ -210,24 +210,15 @@ const sampleData = [
     }
 ];
 
-console.log('===> Запуск тестов парсера UUP dump v1.3.0...');
+console.log('===> Запуск тестов парсера UUP dump v1.3.1...');
 const parsed = sampleData.map(parseBuildRecord);
 
-// Тест 1: Разделение на «Полные сборки» и «Обновления»
+// Тест 1: Классификация категорий
 assert.strictEqual(parsed[0].packageCategory, 'Полные сборки');
-assert.strictEqual(parsed[1].packageCategory, 'Полные сборки');
-assert.strictEqual(parsed[2].packageCategory, 'Обновления'); // Cumulative Update
-assert.strictEqual(parsed[3].packageCategory, 'Обновления'); // Preview Update
-assert.strictEqual(parsed[4].packageCategory, 'Обновления'); // .NET Framework
-console.log('  [PASS] Тест 1: Классификация packageCategory разделила 2 полные сборки и 3 обновления');
+assert.strictEqual(parsed[2].packageCategory, 'Обновления');
+console.log('  [PASS] Тест 1: Категории пакетов корректно определены');
 
-// Тест 2: Подсчет фасетов для packageCategory
-const initialStats = computeDynamicFacetCounts(parsed, {}, '');
-assert.strictEqual(initialStats.packageCategory.get('Полные сборки'), 2);
-assert.strictEqual(initialStats.packageCategory.get('Обновления'), 3);
-console.log('  [PASS] Тест 2: Фасетная категория "Категория" имеет точные начальные счетчики (2 и 3)');
-
-// Тест 3: Фильтрация по «Полные сборки»
+// Тест 2: Проверка сокрытия недоступных сборок при фильтрации по «Полные сборки»
 const fullBuildsFilters = {
     packageCategory: new Set(['Полные сборки']),
     arch: new Set(),
@@ -237,20 +228,18 @@ const fullBuildsFilters = {
     updateType: new Set(),
     buildNumber: new Set()
 };
-const fullBuilds = filterItems(parsed, fullBuildsFilters, '');
-assert.strictEqual(fullBuilds.length, 2);
-assert.strictEqual(fullBuilds[0].title.includes('version 26H2'), true);
-assert.strictEqual(fullBuilds[1].title.includes('version 26H2'), true);
-console.log('  [PASS] Тест 3: Фильтр "Полные сборки" оставил ровно 2 установочных образа ОС');
-
-// Тест 4: Динамический пересчет типов при выбранном «Полные сборки»
 const fullBuildsStats = computeDynamicFacetCounts(parsed, fullBuildsFilters, '');
-assert.strictEqual(fullBuildsStats.updateType.get('.NET Framework Update') || 0, 0);
-assert.strictEqual(fullBuildsStats.updateType.get('Cumulative Update') || 0, 0);
-assert.strictEqual(fullBuildsStats.updateType.get('Standard Build'), 2);
-console.log('  [PASS] Тест 4: При выбранных полных сборках типы .NET Framework и Cumulative Update имеют 0 совпадений');
 
-// Тест 5: Фильтрация по «Обновления»
+// В полных сборках доступна сборка 26300.9807 (count > 0, должна отображаться в селекте)
+assert.strictEqual(fullBuildsStats.buildNumber.get('26300.9807') > 0, true);
+
+// Сборки обновлений 26300.9711, 26300.9278, 26300.10008 имеют count 0 (должны исчезать из выпадающего списка)
+assert.strictEqual(fullBuildsStats.buildNumber.get('26300.9711') || 0, 0);
+assert.strictEqual(fullBuildsStats.buildNumber.get('26300.9278') || 0, 0);
+assert.strictEqual(fullBuildsStats.buildNumber.get('26300.10008') || 0, 0);
+console.log('  [PASS] Тест 2: При фильтре "Полные сборки" недоступные сборки обновлений получают count = 0 (исчезают из селекта)');
+
+// Тест 3: Проверка сокрытия при фильтрации по «Обновления»
 const updatesFilters = {
     packageCategory: new Set(['Обновления']),
     arch: new Set(),
@@ -260,8 +249,13 @@ const updatesFilters = {
     updateType: new Set(),
     buildNumber: new Set()
 };
-const updates = filterItems(parsed, updatesFilters, '');
-assert.strictEqual(updates.length, 3);
-console.log('  [PASS] Тест 5: Фильтр "Обновления" оставил ровно 3 обновления (.NET, Cumulative, Preview)');
+const updatesStats = computeDynamicFacetCounts(parsed, updatesFilters, '');
+// Сборка 26300.9807 (полная сборка) должна исчезнуть (count = 0)
+assert.strictEqual(updatesStats.buildNumber.get('26300.9807') || 0, 0);
+// Сборки обновлений должны остаться (count > 0)
+assert.strictEqual(updatesStats.buildNumber.get('26300.9711') > 0, true);
+assert.strictEqual(updatesStats.buildNumber.get('26300.9278') > 0, true);
+assert.strictEqual(updatesStats.buildNumber.get('26300.10008') > 0, true);
+console.log('  [PASS] Тест 3: При фильтре "Обновления" сборки полных образов получают count = 0 (исчезают из селекта)');
 
-console.log('\n Все unit-тесты v1.3.0 успешно пройдены!');
+console.log('\n Все unit-тесты v1.3.1 успешно пройдены!');

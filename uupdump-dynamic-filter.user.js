@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.3.0
+// @version      1.3.1
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -282,26 +282,58 @@
         // 2. Обновление выпадающего списка «Сборка (Build)»
         const buildSelect = state.panelEl.querySelector('.uup-filter-build-select');
         const clearBuildBtn = state.panelEl.querySelector('.uup-filter-clear-build-btn');
+        const buildGroup = buildSelect ? buildSelect.closest('.uup-filter-group') : null;
 
         if (buildSelect) {
             const options = buildSelect.querySelectorAll('option');
-            let hasActiveBuild = state.filters.buildNumber.size > 0;
+            let visibleBuildOptionsCount = 0;
+            let selectedBuildBecameUnavailable = false;
 
             options.forEach(opt => {
                 const bVal = opt.value;
                 if (!bVal) {
+                    // Опция "Все сборки"
                     return;
                 }
                 const bCount = dynamicStats.buildNumber?.get(bVal) || 0;
                 opt.textContent = `${bVal} (${bCount})`;
 
-                if (bCount === 0 && !state.filters.buildNumber.has(bVal)) {
+                if (bCount === 0) {
+                    // Если сборка недоступна — полностью скрываем её из выпадающего списка
+                    opt.hidden = true;
+                    opt.style.display = 'none';
                     opt.disabled = true;
+
+                    if (state.filters.buildNumber.has(bVal)) {
+                        selectedBuildBecameUnavailable = true;
+                    }
                 } else {
+                    // Если доступна — показываем
+                    opt.hidden = false;
+                    opt.style.display = '';
                     opt.disabled = false;
+                    visibleBuildOptionsCount++;
                 }
             });
 
+            // Если ранее выбранная сборка стала недоступна из-за другого фильтра — сбрасываем выбор
+            if (selectedBuildBecameUnavailable) {
+                state.filters.buildNumber.clear();
+                buildSelect.value = '';
+            }
+
+            // Обновляем текст пункта "Все сборки"
+            const defaultOpt = buildSelect.querySelector('option[value=""]');
+            if (defaultOpt) {
+                defaultOpt.textContent = `Все сборки (Доступно: ${visibleBuildOptionsCount})`;
+            }
+
+            // Если нет ни одной доступной сборки — скрываем всю строку группы
+            if (buildGroup) {
+                buildGroup.style.display = visibleBuildOptionsCount === 0 ? 'none' : 'flex';
+            }
+
+            let hasActiveBuild = state.filters.buildNumber.size > 0;
             if (hasActiveBuild) {
                 buildSelect.style.borderColor = '#2185d0';
                 buildSelect.style.backgroundColor = 'rgba(33, 133, 208, 0.08)';
@@ -356,7 +388,6 @@
     }
 
     function createChipGroup(title, iconClass, category, statsMap) {
-        // Если элементов нет — строка фильтров не выводится
         if (!statsMap || statsMap.size === 0) return null;
 
         const groupDiv = document.createElement('div');
@@ -416,7 +447,6 @@
     }
 
     function createDropdownGroup(title, iconClass, category, statsMap) {
-        // Если сборок нет — группа с выпадающим списком не выводится
         if (!statsMap || statsMap.size === 0) return null;
 
         const groupDiv = document.createElement('div');

@@ -17,7 +17,7 @@ flowchart TD
     EventHandlers --> FilterEngine["Движок сопоставления (matchesItem / applyFilters)"]
     FilterEngine --> DynamicRecalc["Динамический пересчет счетчиков (computeDynamicFacetCounts)"]
     FilterEngine --> DOMUpdate["Мгновенное обновление DOM (style.display = '' / 'none')"]
-    DynamicRecalc --> ControlState["Обновление бейджей и блокировка нулевых опций (updateFacetControls)"]
+    DynamicRecalc --> ControlState["Обновление бейджей, блокировка пустых чипов и скрытие недоступных option (updateFacetControls)"]
     
     DOMChange["Динамическое изменение DOM (AJAX / пагинация)"] --> MutationObserver["MutationObserver"]
     MutationObserver --> Scanner
@@ -42,7 +42,7 @@ flowchart TD
 
 ### 2.2. Facet Engine & Dynamic Recalculation (`computeDynamicFacetCounts`, `createChipGroup`, `createDropdownGroup`)
 - **Ответственность:** Агрегация уникальных значений и динамический расчет доступного количества сборок в контексте других активных фильтров.
-- **Особенность:** Блокировка пустых чипов (`count === 0` $\rightarrow$ `disabled`, полупрозрачность и запрет клика) и автоматическое сокрытие пустых групп.
+- **Особенность:** Блокировка пустых чипов (`count === 0` $\rightarrow$ `disabled`, полупрозрачность и запрет клика) и полное скрытие (`hidden = true; display = 'none'`) недоступных сборок из выпадающего списка.
 
 ### 2.3. Filter Matching Engine (`matchesItem`, `applyFilters`)
 - **Ответственность:** Оценка каждой строки на соответствие активным фильтрам и поисковым ключевым словам.
@@ -51,4 +51,4 @@ flowchart TD
 - **Ответственность:** Построение интуитивной панели над таблицей:
   - **Пункт №1 (Верхний):** группа «Категория» (`Полные сборки` / `Обновления`).
   - Чипы для Архитектуры, ОС, Релиза, Ветки, Типа сборки.
-  - Компактный выпадающий список `<select>` для сборок (Build) с мини-кнопкой сброса `[✖]`.
+  - Компактный выпадающий список `<select>` для сборок (Build) с автоматическим скрытием неактивных опций и мини-кнопкой сброса `[✖]`.
