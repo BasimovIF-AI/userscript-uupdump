@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.4.0
+// @version      1.5.0
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -19,6 +19,228 @@
 
 (function () {
     'use strict';
+
+    // -------------------------------------------------------------
+    // МОДУЛЬ 0.0: МУЛЬТИЯЗЫЧНОСТЬ И ЛОКАЛИЗАЦИЯ (i18n)
+    // -------------------------------------------------------------
+    const I18N = {
+        en: {
+            name: 'English',
+            panelTitle: 'Dynamic Filters',
+            searchPlaceholder: 'Search builds, versions, KB, UUID...',
+            statusCount: 'Found: {visible} of {total} builds',
+            reset: 'Reset',
+            category: 'Category',
+            arch: 'Architecture',
+            os: 'Operating System',
+            version: 'Version / Release',
+            branch: 'Branch',
+            buildType: 'Build Type',
+            buildNumber: 'Build',
+            allBuilds: 'All builds (Available: {count})',
+            clearBuildTooltip: 'Clear build selection',
+            fullBuilds: 'Full Builds',
+            updates: 'Updates',
+            sysComponents: 'System Components',
+            otherOS: 'Other OS'
+        },
+        ru: {
+            name: 'Русский',
+            panelTitle: 'Динамические фильтры',
+            searchPlaceholder: 'Живой поиск по таблице...',
+            statusCount: 'Найдено: {visible} из {total} сборок',
+            reset: 'Сбросить',
+            category: 'Категория',
+            arch: 'Архитектура',
+            os: 'Операционная система',
+            version: 'Версия / Релиз',
+            branch: 'Ветка разработки',
+            buildType: 'Тип сборки',
+            buildNumber: 'Сборка (Build)',
+            allBuilds: 'Все сборки (Доступно: {count})',
+            clearBuildTooltip: 'Сбросить выбор сборки',
+            fullBuilds: 'Полные сборки',
+            updates: 'Обновления',
+            sysComponents: 'Системные компоненты',
+            otherOS: 'Другая ОС'
+        },
+        de: {
+            name: 'Deutsch',
+            panelTitle: 'Dynamische Filter',
+            searchPlaceholder: 'Builds, Versionen, KB, UUID suchen...',
+            statusCount: 'Gefunden: {visible} von {total} Builds',
+            reset: 'Zurücksetzen',
+            category: 'Kategorie',
+            arch: 'Architektur',
+            os: 'Betriebssystem',
+            version: 'Version / Release',
+            branch: 'Branch',
+            buildType: 'Build-Typ',
+            buildNumber: 'Build',
+            allBuilds: 'Alle Builds (Verfügbar: {count})',
+            clearBuildTooltip: 'Build-Auswahl aufheben',
+            fullBuilds: 'Vollständige Builds',
+            updates: 'Updates',
+            sysComponents: 'Systemkomponenten',
+            otherOS: 'Anderes BS'
+        },
+        zh: {
+            name: '简体中文',
+            panelTitle: '动态筛选器',
+            searchPlaceholder: '搜索版本、内部版本号、KB、UUID...',
+            statusCount: '已找到: {visible} / {total} 个版本',
+            reset: '重置',
+            category: '分类',
+            arch: '体系结构',
+            os: '操作系统',
+            version: '版本 / 发行版',
+            branch: '开发分支',
+            buildType: '版本类型',
+            buildNumber: '内部版本 (Build)',
+            allBuilds: '全部内部版本 (可用: {count})',
+            clearBuildTooltip: '清除版本选择',
+            fullBuilds: '完整镜像',
+            updates: '更新补丁',
+            sysComponents: '系统组件',
+            otherOS: '其他操作系统'
+        },
+        fr: {
+            name: 'Français',
+            panelTitle: 'Filtres dynamiques',
+            searchPlaceholder: 'Rechercher builds, versions, KB, UUID...',
+            statusCount: 'Trouvé: {visible} sur {total} builds',
+            reset: 'Réinitialiser',
+            category: 'Catégorie',
+            arch: 'Architecture',
+            os: 'Système d\'exploitation',
+            version: 'Version / Édition',
+            branch: 'Branche',
+            buildType: 'Type de build',
+            buildNumber: 'Build',
+            allBuilds: 'Tous les builds (Disponibles: {count})',
+            clearBuildTooltip: 'Effacer la sélection de build',
+            fullBuilds: 'Builds complets',
+            updates: 'Mises à jour',
+            sysComponents: 'Composants système',
+            otherOS: 'Autre OS'
+        },
+        es: {
+            name: 'Español',
+            panelTitle: 'Filtros dinámicos',
+            searchPlaceholder: 'Buscar compilaciones, versiones, KB, UUID...',
+            statusCount: 'Encontrado: {visible} de {total} compilaciones',
+            reset: 'Restablecer',
+            category: 'Categoría',
+            arch: 'Arquitectura',
+            os: 'Sistema operativo',
+            version: 'Versión / Lanzamiento',
+            branch: 'Rama',
+            buildType: 'Tipo de compilación',
+            buildNumber: 'Compilación (Build)',
+            allBuilds: 'Todas las compilaciones (Disponibles: {count})',
+            clearBuildTooltip: 'Borrar selección de compilación',
+            fullBuilds: 'Compilaciones completas',
+            updates: 'Actualizaciones',
+            sysComponents: 'Componentes del sistema',
+            otherOS: 'Otro SO'
+        },
+        pt: {
+            name: 'Português',
+            panelTitle: 'Filtros dinâmicos',
+            searchPlaceholder: 'Pesquisar compilações, versões, KB, UUID...',
+            statusCount: 'Encontrado: {visible} de {total} compilações',
+            reset: 'Redefinir',
+            category: 'Categoria',
+            arch: 'Arquitetura',
+            os: 'Sistema operacional',
+            version: 'Versão / Lançamento',
+            branch: 'Ramificação (Branch)',
+            buildType: 'Tipo de compilação',
+            buildNumber: 'Compilação (Build)',
+            allBuilds: 'Todas as compilações (Disponíveis: {count})',
+            clearBuildTooltip: 'Limpar seleção de compilação',
+            fullBuilds: 'Compilações completas',
+            updates: 'Atualizações',
+            sysComponents: 'Componentes do sistema',
+            otherOS: 'Outro SO'
+        },
+        it: {
+            name: 'Italiano',
+            panelTitle: 'Filtri dinamici',
+            searchPlaceholder: 'Cerca build, versioni, KB, UUID...',
+            statusCount: 'Trovato: {visible} di {total} build',
+            reset: 'Reimposta',
+            category: 'Categoria',
+            arch: 'Architettura',
+            os: 'Sistema operativo',
+            version: 'Versione / Release',
+            branch: 'Ramo (Branch)',
+            buildType: 'Tipo di build',
+            buildNumber: 'Build',
+            allBuilds: 'Tutte le build (Disponibili: {count})',
+            clearBuildTooltip: 'Cancella selezione build',
+            fullBuilds: 'Build complete',
+            updates: 'Aggiornamenti',
+            sysComponents: 'Componenti di sistema',
+            otherOS: 'Altro SO'
+        }
+    };
+
+    function detectLanguage() {
+        try {
+            const saved = localStorage.getItem('uup_filter_lang');
+            if (saved && I18N[saved]) return saved;
+        } catch (e) {}
+
+        const docLang = (document.documentElement.lang || '').toLowerCase();
+        if (docLang.startsWith('ru')) return 'ru';
+        if (docLang.startsWith('de')) return 'de';
+        if (docLang.startsWith('zh')) return 'zh';
+        if (docLang.startsWith('fr')) return 'fr';
+        if (docLang.startsWith('es')) return 'es';
+        if (docLang.startsWith('pt')) return 'pt';
+        if (docLang.startsWith('it')) return 'it';
+
+        const browserLangs = (typeof navigator !== 'undefined' && navigator.languages && navigator.languages.length)
+            ? navigator.languages
+            : [(typeof navigator !== 'undefined' ? navigator.language : '') || 'en'];
+
+        for (const l of browserLangs) {
+            const code = (l || '').toLowerCase();
+            if (code.startsWith('ru') || code.startsWith('be') || code.startsWith('uk') || code.startsWith('kk')) return 'ru';
+            if (code.startsWith('de')) return 'de';
+            if (code.startsWith('zh')) return 'zh';
+            if (code.startsWith('fr')) return 'fr';
+            if (code.startsWith('es')) return 'es';
+            if (code.startsWith('pt')) return 'pt';
+            if (code.startsWith('it')) return 'it';
+            if (code.startsWith('en')) return 'en';
+        }
+
+        return 'en';
+    }
+
+    function t(key, params = {}) {
+        const currentLang = (typeof state !== 'undefined' && state.lang) ? state.lang : 'en';
+        const langDict = I18N[currentLang] || I18N.en;
+        let text = langDict[key] || I18N.en[key] || key;
+        for (const [k, v] of Object.entries(params)) {
+            text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+        }
+        return text;
+    }
+
+    function formatFacetLabel(category, value) {
+        if (category === 'packageCategory') {
+            if (value === 'full') return t('fullBuilds');
+            if (value === 'update') return t('updates');
+        }
+        if (category === 'os') {
+            if (value === 'sys_components') return t('sysComponents');
+            if (value === 'other') return t('otherOS');
+        }
+        return value;
+    }
 
     // -------------------------------------------------------------
     // МОДУЛЬ 0: ВАЛИДАЦИЯ ЦЕЛЕВЫХ СТРАНИЦ И ТАБЛИЦ
@@ -79,7 +301,7 @@
         if (/Windows 10/i.test(title)) return 'Windows 10';
         if (/Windows Holographic/i.test(title)) return 'Windows Holographic';
         if (/Windows Team|Surface Hub/i.test(title)) return 'Windows Team';
-        if (/\.NET Framework|Update Stack Package/i.test(title)) return 'Системные компоненты';
+        if (/\.NET Framework|Update Stack Package/i.test(title)) return 'sys_components';
 
         if (buildNumber) {
             const major = parseInt(buildNumber.split('.')[0], 10);
@@ -88,7 +310,7 @@
                 if (major >= 10240) return 'Windows 10';
             }
         }
-        return 'Другая ОС';
+        return 'other';
     }
 
     function detectBuildNumber(title) {
@@ -156,9 +378,9 @@
     function detectPackageCategory(title) {
         // Разделение между апдейтами и полными установочными сборками
         if (/\.NET Framework|Cumulative Update|Preview Update|Security Update|Quality Update|Dynamic Update|Update Stack Package|Autopilot update|Setup Duo|\bKB\d{6,8}\b/i.test(title)) {
-            return 'Обновления';
+            return 'update';
         }
-        return 'Полные сборки';
+        return 'full';
     }
 
     function detectType(title) {
@@ -199,13 +421,21 @@
         const updateType = detectType(title);
         const uuid = extractUuid(link);
 
+        const catWords = packageCategory === 'full'
+            ? 'full builds полные сборки 完整镜像 vollständige'
+            : 'updates обновления 更新补丁';
+        const osWords = os === 'sys_components'
+            ? 'system components системные компоненты'
+            : (os === 'other' ? 'other os другая ос' : os);
+
         const searchableText = [
             title,
             arch,
             os,
+            osWords,
             version || '',
             branch || '',
-            packageCategory,
+            catWords,
             updateType,
             buildNumber,
             uuid
@@ -234,6 +464,7 @@
     const CATEGORIES = ['packageCategory', 'arch', 'os', 'version', 'branch', 'updateType', 'buildNumber'];
 
     const state = {
+        lang: detectLanguage(),
         items: [],
         filters: {
             packageCategory: new Set(),
@@ -301,7 +532,7 @@
         // Обновление счетчика в заголовке панели
         const counterEl = state.panelEl?.querySelector('.uup-filter-status-count');
         if (counterEl) {
-            counterEl.textContent = `${visibleCount} из ${state.items.length}`;
+            counterEl.textContent = t('statusCount', { visible: visibleCount, total: state.items.length });
         }
 
         // Динамический пересчет и обновление состояния элементов управления
@@ -397,7 +628,7 @@
             // Обновляем текст пункта "Все сборки"
             const defaultOpt = buildSelect.querySelector('option[value=""]');
             if (defaultOpt) {
-                defaultOpt.textContent = `Все сборки (Доступно: ${visibleBuildOptionsCount})`;
+                defaultOpt.textContent = t('allBuilds', { count: visibleBuildOptionsCount });
             }
 
             // Если доступных сборок нет — скрываем группу выпадающего списка
@@ -487,13 +718,13 @@
         const entries = Array.from(statsMap.entries());
 
         if (category === 'packageCategory') {
-            const order = ['Полные сборки', 'Обновления'];
+            const order = ['full', 'update'];
             entries.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
         } else if (category === 'arch') {
             const order = ['x64', 'arm64', 'x86', 'other'];
             entries.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
         } else if (category === 'os') {
-            const order = ['Windows 11', 'Windows 10', 'Windows Server', 'Azure Stack HCI', 'Windows CPC OS', 'Windows Holographic', 'Windows Team', 'Системные компоненты'];
+            const order = ['Windows 11', 'Windows 10', 'Windows Server', 'Azure Stack HCI', 'Windows CPC OS', 'Windows Holographic', 'Windows Team', 'sys_components', 'other'];
             entries.sort((a, b) => {
                 const idxA = order.indexOf(a[0]);
                 const idxB = order.indexOf(b[0]);
@@ -533,7 +764,8 @@
             btn.style.cursor = 'pointer';
             btn.style.transition = 'all 0.2s';
 
-            btn.innerHTML = `${val} <span class="ui circular label tiny uup-filter-count-badge" style="margin-left: 4px; padding: 2px 6px;">${count}</span>`;
+            const displayVal = formatFacetLabel(category, val);
+            btn.innerHTML = `${displayVal} <span class="ui circular label tiny uup-filter-count-badge" style="margin-left: 4px; padding: 2px 6px;">${count}</span>`;
 
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -593,7 +825,7 @@
         // Пункт по умолчанию
         const defaultOpt = document.createElement('option');
         defaultOpt.value = '';
-        defaultOpt.textContent = `Все сборки (Всего: ${state.items.length})`;
+        defaultOpt.textContent = t('allBuilds', { count: state.items.length });
         select.appendChild(defaultOpt);
 
         // Сортировка сборок численно по убыванию ревизии
@@ -624,7 +856,7 @@
         const clearBtn = document.createElement('button');
         clearBtn.type = 'button';
         clearBtn.className = 'ui tiny icon basic button uup-filter-clear-build-btn';
-        clearBtn.title = 'Сбросить выбор сборки';
+        clearBtn.title = t('clearBuildTooltip');
         clearBtn.style.display = 'none';
         clearBtn.style.margin = '0';
         clearBtn.style.padding = '5px 7px';
@@ -663,7 +895,7 @@
         panel.style.borderRadius = '8px';
         panel.style.backgroundColor = 'var(--bg-panel, rgba(0, 0, 0, 0.02))';
 
-        // 1. Верхний бар: Заголовок, поиск и статус
+        // 1. Верхний бар: Заголовок, язык, поиск и статус
         const headerBar = document.createElement('div');
         headerBar.style.display = 'flex';
         headerBar.style.justifyContent = 'space-between';
@@ -681,10 +913,10 @@
         titleDiv.innerHTML = `
             <h4 class="ui header" style="margin: 0; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fa-solid fa-filter fa-sm" style="color: #2185d0;"></i>
-                Динамические фильтры
+                ${t('panelTitle')}
             </h4>
             <span class="ui label teal tiny" style="margin-left: 6px;">
-                Найдено: <b class="uup-filter-status-count" style="margin-left: 4px;">${state.items.length} из ${state.items.length}</b>
+                <b class="uup-filter-status-count">${t('statusCount', { visible: state.items.length, total: state.items.length })}</b>
             </span>
         `;
         headerBar.appendChild(titleDiv);
@@ -692,17 +924,60 @@
         const actionsDiv = document.createElement('div');
         actionsDiv.style.display = 'flex';
         actionsDiv.style.alignItems = 'center';
+        actionsDiv.style.flexWrap = 'wrap';
         actionsDiv.style.gap = '8px';
+
+        // Селектор языка
+        const langSelect = document.createElement('select');
+        langSelect.className = 'uup-filter-lang-select';
+        langSelect.title = 'Language / Язык';
+        langSelect.style.padding = '5px 8px';
+        langSelect.style.borderRadius = '6px';
+        langSelect.style.border = '1px solid rgba(34,36,38,.2)';
+        langSelect.style.backgroundColor = 'var(--bg-input, rgba(255,255,255,0.9))';
+        langSelect.style.color = 'inherit';
+        langSelect.style.fontSize = '0.85em';
+        langSelect.style.cursor = 'pointer';
+        langSelect.style.outline = 'none';
+
+        const langOptions = [
+            { code: 'en', label: '🌐 English (EN)' },
+            { code: 'ru', label: 'Русский (RU)' },
+            { code: 'de', label: 'Deutsch (DE)' },
+            { code: 'zh', label: '简体中文 (ZH)' },
+            { code: 'fr', label: 'Français (FR)' },
+            { code: 'es', label: 'Español (ES)' },
+            { code: 'pt', label: 'Português (PT)' },
+            { code: 'it', label: 'Italiano (IT)' }
+        ];
+
+        langOptions.forEach(opt => {
+            const o = document.createElement('option');
+            o.value = opt.code;
+            o.textContent = opt.label;
+            if (opt.code === state.lang) o.selected = true;
+            langSelect.appendChild(o);
+        });
+
+        langSelect.addEventListener('change', () => {
+            state.lang = langSelect.value;
+            try {
+                localStorage.setItem('uup_filter_lang', state.lang);
+            } catch (e) {}
+            renderFilterPanel();
+            applyFilters();
+        });
+        actionsDiv.appendChild(langSelect);
 
         // Поле живого поиска
         const searchWrap = document.createElement('div');
         searchWrap.className = 'ui small icon input';
-        searchWrap.style.minWidth = '240px';
+        searchWrap.style.minWidth = '220px';
 
         const searchInput = document.createElement('input');
         searchInput.type = 'text';
         searchInput.className = 'uup-filter-search-input';
-        searchInput.placeholder = 'Живой поиск по таблице...';
+        searchInput.placeholder = t('searchPlaceholder');
         searchInput.value = state.searchQuery;
 
         let debounceTimer = null;
@@ -725,7 +1000,7 @@
         resetBtn.type = 'button';
         resetBtn.className = 'ui tiny red basic button uup-filter-reset-btn';
         resetBtn.style.display = 'none';
-        resetBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> Сбросить';
+        resetBtn.innerHTML = `<i class="fa-solid fa-rotate-left"></i> ${t('reset')}`;
         resetBtn.addEventListener('click', resetAllFilters);
         actionsDiv.appendChild(resetBtn);
 
@@ -739,31 +1014,31 @@
         groupsContainer.style.gap = '4px';
 
         // ПУНКТ 1 (САМЫЙ ВЕРХНИЙ): Разделение между полными сборками и обновлениями
-        const gCategory = createChipGroup('Категория', 'fa-solid fa-layer-group', 'packageCategory', initialStats.packageCategory);
+        const gCategory = createChipGroup(t('category'), 'fa-solid fa-layer-group', 'packageCategory', initialStats.packageCategory);
         if (gCategory) groupsContainer.appendChild(gCategory);
 
         // ПУНКТ 2: Архитектура
-        const gArch = createChipGroup('Архитектура', 'fa-solid fa-microchip', 'arch', initialStats.arch);
+        const gArch = createChipGroup(t('arch'), 'fa-solid fa-microchip', 'arch', initialStats.arch);
         if (gArch) groupsContainer.appendChild(gArch);
 
         // ПУНКТ 3: Операционная система
-        const gOS = createChipGroup('Операционная система', 'fa-brands fa-microsoft', 'os', initialStats.os);
+        const gOS = createChipGroup(t('os'), 'fa-brands fa-microsoft', 'os', initialStats.os);
         if (gOS) groupsContainer.appendChild(gOS);
 
         // ПУНКТ 4: Версия / Релиз
-        const gVersion = createChipGroup('Версия / Релиз', 'fa-solid fa-tag', 'version', initialStats.version);
+        const gVersion = createChipGroup(t('version'), 'fa-solid fa-tag', 'version', initialStats.version);
         if (gVersion) groupsContainer.appendChild(gVersion);
 
         // ПУНКТ 5: Ветка разработки
-        const gBranch = createChipGroup('Ветка разработки', 'fa-solid fa-code-branch', 'branch', initialStats.branch);
+        const gBranch = createChipGroup(t('branch'), 'fa-solid fa-code-branch', 'branch', initialStats.branch);
         if (gBranch) groupsContainer.appendChild(gBranch);
 
-        // ПУНКТ 6: Тип сборки (Standard Build, .NET Framework, Cumulative, Preview)
-        const gType = createChipGroup('Тип сборки', 'fa-solid fa-box-archive', 'updateType', initialStats.updateType);
+        // ПУНКТ 6: Тип сборки
+        const gType = createChipGroup(t('buildType'), 'fa-solid fa-box-archive', 'updateType', initialStats.updateType);
         if (gType) groupsContainer.appendChild(gType);
 
         // ПУНКТ 7: Сборка (Build) в виде выпадающего списка
-        const gBuild = createDropdownGroup('Сборка (Build)', 'fa-solid fa-code-commit', 'buildNumber', initialStats.buildNumber);
+        const gBuild = createDropdownGroup(t('buildNumber'), 'fa-solid fa-code-commit', 'buildNumber', initialStats.buildNumber);
         if (gBuild) groupsContainer.appendChild(gBuild);
 
         panel.appendChild(groupsContainer);

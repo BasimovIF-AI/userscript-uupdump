@@ -1,7 +1,222 @@
-// test_filter_engine.js — Автоматические unit-тесты парсинга и фильтрации сборок UUP dump
+// test_filter_engine.js — Автоматические unit-тесты парсинга, фильтрации и локализации сборок UUP dump
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+
+// -------------------------------------------------------------
+// МОДУЛЬ 0.0: МУЛЬТИЯЗЫЧНОСТЬ И ЛОКАЛИЗАЦИЯ (i18n)
+// -------------------------------------------------------------
+const I18N = {
+    en: {
+        name: 'English',
+        panelTitle: 'Dynamic Filters',
+        searchPlaceholder: 'Search builds, versions, KB, UUID...',
+        statusCount: 'Found: {visible} of {total} builds',
+        reset: 'Reset',
+        category: 'Category',
+        arch: 'Architecture',
+        os: 'Operating System',
+        version: 'Version / Release',
+        branch: 'Branch',
+        buildType: 'Build Type',
+        buildNumber: 'Build',
+        allBuilds: 'All builds (Available: {count})',
+        clearBuildTooltip: 'Clear build selection',
+        fullBuilds: 'Full Builds',
+        updates: 'Updates',
+        sysComponents: 'System Components',
+        otherOS: 'Other OS'
+    },
+    ru: {
+        name: 'Русский',
+        panelTitle: 'Динамические фильтры',
+        searchPlaceholder: 'Живой поиск по таблице...',
+        statusCount: 'Найдено: {visible} из {total} сборок',
+        reset: 'Сбросить',
+        category: 'Категория',
+        arch: 'Архитектура',
+        os: 'Операционная система',
+        version: 'Версия / Релиз',
+        branch: 'Ветка разработки',
+        buildType: 'Тип сборки',
+        buildNumber: 'Сборка (Build)',
+        allBuilds: 'Все сборки (Доступно: {count})',
+        clearBuildTooltip: 'Сбросить выбор сборки',
+        fullBuilds: 'Полные сборки',
+        updates: 'Обновления',
+        sysComponents: 'Системные компоненты',
+        otherOS: 'Другая ОС'
+    },
+    de: {
+        name: 'Deutsch',
+        panelTitle: 'Dynamische Filter',
+        searchPlaceholder: 'Builds, Versionen, KB, UUID suchen...',
+        statusCount: 'Gefunden: {visible} von {total} Builds',
+        reset: 'Zurücksetzen',
+        category: 'Kategorie',
+        arch: 'Architektur',
+        os: 'Betriebssystem',
+        version: 'Version / Release',
+        branch: 'Branch',
+        buildType: 'Build-Typ',
+        buildNumber: 'Build',
+        allBuilds: 'Alle Builds (Verfügbar: {count})',
+        clearBuildTooltip: 'Build-Auswahl aufheben',
+        fullBuilds: 'Vollständige Builds',
+        updates: 'Updates',
+        sysComponents: 'Systemkomponenten',
+        otherOS: 'Anderes BS'
+    },
+    zh: {
+        name: '简体中文',
+        panelTitle: '动态筛选器',
+        searchPlaceholder: '搜索版本、内部版本号、KB、UUID...',
+        statusCount: '已找到: {visible} / {total} 个版本',
+        reset: '重置',
+        category: '分类',
+        arch: '体系结构',
+        os: '操作系统',
+        version: '版本 / 发行版',
+        branch: '开发分支',
+        buildType: '版本类型',
+        buildNumber: '内部版本 (Build)',
+        allBuilds: '全部内部版本 (可用: {count})',
+        clearBuildTooltip: '清除版本选择',
+        fullBuilds: '完整镜像',
+        updates: '更新补丁',
+        sysComponents: '系统组件',
+        otherOS: '其他操作系统'
+    },
+    fr: {
+        name: 'Français',
+        panelTitle: 'Filtres dynamiques',
+        searchPlaceholder: 'Rechercher builds, versions, KB, UUID...',
+        statusCount: 'Trouvé: {visible} sur {total} builds',
+        reset: 'Réinitialiser',
+        category: 'Catégorie',
+        arch: 'Architecture',
+        os: 'Système d\'exploitation',
+        version: 'Version / Édition',
+        branch: 'Branche',
+        buildType: 'Type de build',
+        buildNumber: 'Build',
+        allBuilds: 'Tous les builds (Disponibles: {count})',
+        clearBuildTooltip: 'Effacer la sélection de build',
+        fullBuilds: 'Builds complets',
+        updates: 'Mises à jour',
+        sysComponents: 'Composants système',
+        otherOS: 'Autre OS'
+    },
+    es: {
+        name: 'Español',
+        panelTitle: 'Filtros dinámicos',
+        searchPlaceholder: 'Buscar compilaciones, versiones, KB, UUID...',
+        statusCount: 'Encontrado: {visible} de {total} compilaciones',
+        reset: 'Restablecer',
+        category: 'Categoría',
+        arch: 'Arquitectura',
+        os: 'Sistema operativo',
+        version: 'Versión / Lanzamiento',
+        branch: 'Rama',
+        buildType: 'Tipo de compilación',
+        buildNumber: 'Compilación (Build)',
+        allBuilds: 'Todas las compilaciones (Disponibles: {count})',
+        clearBuildTooltip: 'Borrar selección de compilación',
+        fullBuilds: 'Compilaciones completas',
+        updates: 'Actualizaciones',
+        sysComponents: 'Componentes del sistema',
+        otherOS: 'Otro SO'
+    },
+    pt: {
+        name: 'Português',
+        panelTitle: 'Filtros dinâmicos',
+        searchPlaceholder: 'Pesquisar compilações, versões, KB, UUID...',
+        statusCount: 'Encontrado: {visible} de {total} compilações',
+        reset: 'Redefinir',
+        category: 'Categoria',
+        arch: 'Arquitetura',
+        os: 'Sistema operacional',
+        version: 'Versão / Lançamento',
+        branch: 'Ramificação (Branch)',
+        buildType: 'Tipo de compilação',
+        buildNumber: 'Compilação (Build)',
+        allBuilds: 'Todas as compilações (Disponíveis: {count})',
+        clearBuildTooltip: 'Limpar seleção de compilação',
+        fullBuilds: 'Compilações completas',
+        updates: 'Atualizações',
+        sysComponents: 'Componentes do sistema',
+        otherOS: 'Outro SO'
+    },
+    it: {
+        name: 'Italiano',
+        panelTitle: 'Filtri dinamici',
+        searchPlaceholder: 'Cerca build, versioni, KB, UUID...',
+        statusCount: 'Trovato: {visible} di {total} build',
+        reset: 'Reimposta',
+        category: 'Categoria',
+        arch: 'Architettura',
+        os: 'Sistema operativo',
+        version: 'Versione / Release',
+        branch: 'Ramo (Branch)',
+        buildType: 'Tipo di build',
+        buildNumber: 'Build',
+        allBuilds: 'Tutte le build (Disponibili: {count})',
+        clearBuildTooltip: 'Cancella selezione build',
+        fullBuilds: 'Build complete',
+        updates: 'Aggiornamenti',
+        sysComponents: 'Componenti di sistema',
+        otherOS: 'Altro SO'
+    }
+};
+
+function detectLanguage(mockContext = {}) {
+    const { savedLang, docLang = '', browserLangs = [] } = mockContext;
+    if (savedLang && I18N[savedLang]) return savedLang;
+
+    const dl = (docLang || '').toLowerCase();
+    if (dl.startsWith('ru')) return 'ru';
+    if (dl.startsWith('de')) return 'de';
+    if (dl.startsWith('zh')) return 'zh';
+    if (dl.startsWith('fr')) return 'fr';
+    if (dl.startsWith('es')) return 'es';
+    if (dl.startsWith('pt')) return 'pt';
+    if (dl.startsWith('it')) return 'it';
+
+    for (const l of browserLangs) {
+        const code = (l || '').toLowerCase();
+        if (code.startsWith('ru') || code.startsWith('be') || code.startsWith('uk') || code.startsWith('kk')) return 'ru';
+        if (code.startsWith('de')) return 'de';
+        if (code.startsWith('zh')) return 'zh';
+        if (code.startsWith('fr')) return 'fr';
+        if (code.startsWith('es')) return 'es';
+        if (code.startsWith('pt')) return 'pt';
+        if (code.startsWith('it')) return 'it';
+        if (code.startsWith('en')) return 'en';
+    }
+
+    return 'en';
+}
+
+function t(key, params = {}, lang = 'en') {
+    const langDict = I18N[lang] || I18N.en;
+    let text = langDict[key] || I18N.en[key] || key;
+    for (const [k, v] of Object.entries(params)) {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+    }
+    return text;
+}
+
+function formatFacetLabel(category, value, lang = 'en') {
+    if (category === 'packageCategory') {
+        if (value === 'full') return t('fullBuilds', {}, lang);
+        if (value === 'update') return t('updates', {}, lang);
+    }
+    if (category === 'os') {
+        if (value === 'sys_components') return t('sysComponents', {}, lang);
+        if (value === 'other') return t('otherOS', {}, lang);
+    }
+    return value;
+}
 
 function isBuildsPage(pathname) {
     if (!pathname) return false;
@@ -49,7 +264,7 @@ function detectOS(title, buildNumber) {
     if (/Windows 10/i.test(title)) return 'Windows 10';
     if (/Windows Holographic/i.test(title)) return 'Windows Holographic';
     if (/Windows Team|Surface Hub/i.test(title)) return 'Windows Team';
-    if (/\.NET Framework|Update Stack Package/i.test(title)) return 'Системные компоненты';
+    if (/\.NET Framework|Update Stack Package/i.test(title)) return 'sys_components';
 
     if (buildNumber) {
         const major = parseInt(buildNumber.split('.')[0], 10);
@@ -58,7 +273,7 @@ function detectOS(title, buildNumber) {
             if (major >= 10240) return 'Windows 10';
         }
     }
-    return 'Другая ОС';
+    return 'other';
 }
 
 function detectBuildNumber(title) {
@@ -123,9 +338,9 @@ function detectBranch(title) {
 
 function detectPackageCategory(title) {
     if (/\.NET Framework|Cumulative Update|Preview Update|Security Update|Quality Update|Dynamic Update|Update Stack Package|Autopilot update|Setup Duo|\bKB\d{6,8}\b/i.test(title)) {
-        return 'Обновления';
+        return 'update';
     }
-    return 'Полные сборки';
+    return 'full';
 }
 
 function detectType(title) {
@@ -153,13 +368,21 @@ function parseBuildRecord({ title, arch, date, link }) {
     const updateType = detectType(title);
     const uuid = extractUuid(link);
 
+    const catWords = packageCategory === 'full'
+        ? 'full builds полные сборки'
+        : 'updates обновления';
+    const osWords = os === 'sys_components'
+        ? 'system components системные компоненты'
+        : (os === 'other' ? 'other os другая ос' : os);
+
     const searchableText = [
         title,
         normArch,
         os,
+        osWords,
         version || '',
         branch || '',
-        packageCategory,
+        catWords,
         updateType,
         buildNumber,
         uuid
@@ -199,40 +422,6 @@ function matchesItem(item, filters, queryTokens, categoryToIgnore = null) {
     }
 
     return true;
-}
-
-function computeDynamicFacetCounts(items, filters, searchQuery) {
-    const queryTokens = (searchQuery || '')
-        .trim()
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(Boolean);
-
-    const dynamicStats = {};
-    CATEGORIES.forEach(cat => {
-        dynamicStats[cat] = new Map();
-    });
-
-    CATEGORIES.forEach(cat => {
-        items.forEach(item => {
-            if (matchesItem(item, stateFiltersFallback(filters), queryTokens, cat)) {
-                const val = item[cat];
-                if (val) {
-                    dynamicStats[cat].set(val, (dynamicStats[cat].get(val) || 0) + 1);
-                }
-            }
-        });
-    });
-
-    return dynamicStats;
-}
-
-function stateFiltersFallback(f) {
-    const res = {};
-    CATEGORIES.forEach(cat => {
-        res[cat] = f && f[cat] ? f[cat] : new Set();
-    });
-    return res;
 }
 
 // ---------------- ТЕСТОВЫЕ ДАННЫЕ ----------------
@@ -275,7 +464,7 @@ const sampleData = [
     }
 ];
 
-console.log('===> Запуск тестов парсера UUP dump v1.4.0...');
+console.log('===> Запуск тестов парсера UUP dump v1.5.0...');
 
 // Тест 1: Валидация целевых страниц URL
 assert.strictEqual(isBuildsPage('/known.php'), true);
@@ -305,33 +494,56 @@ const parsed = sampleData.map(parseBuildRecord);
 // Windows 11 Full Build
 assert.strictEqual(parsed[0].os, 'Windows 11');
 assert.strictEqual(parsed[0].version, '26H2');
-assert.strictEqual(parsed[0].packageCategory, 'Полные сборки');
+assert.strictEqual(parsed[0].packageCategory, 'full');
 
 // Windows Server Update with (1809) bracket (version, NOT branch!)
 assert.strictEqual(parsed[1].os, 'Windows Server');
 assert.strictEqual(parsed[1].version, '1809');
 assert.strictEqual(parsed[1].branch, null); // (1809) и (17763.1) отсеяны, ветка null
-assert.strictEqual(parsed[1].packageCategory, 'Обновления');
+assert.strictEqual(parsed[1].packageCategory, 'update');
 
 // Azure Stack HCI
 assert.strictEqual(parsed[3].os, 'Azure Stack HCI');
 assert.strictEqual(parsed[3].version, '20H2');
-assert.strictEqual(parsed[3].packageCategory, 'Обновления');
+assert.strictEqual(parsed[3].packageCategory, 'update');
 
 // Update Stack Package
-assert.strictEqual(parsed[4].os, 'Системные компоненты');
-assert.strictEqual(parsed[4].packageCategory, 'Обновления');
+assert.strictEqual(parsed[4].os, 'sys_components');
+assert.strictEqual(parsed[4].packageCategory, 'update');
 assert.strictEqual(parsed[4].updateType, 'Update Stack Package');
 
 // Future Experimental build with branch
 assert.strictEqual(parsed[5].os, 'Windows 11');
 assert.strictEqual(parsed[5].version, 'Future / Experimental');
 assert.strictEqual(parsed[5].branch, 'rs_prerelease');
-assert.strictEqual(parsed[5].packageCategory, 'Полные сборки');
+assert.strictEqual(parsed[5].packageCategory, 'full');
 
 console.log('  [PASS] Тест 3: Точная классификация ОС, версий, веток и категорий подтверждена');
 
-// Тест 4: Пакетная валидация на всем каталоге из 9148 записей (если файл существует)
+// Тест 4: Автодетекция языка и переводы i18n
+assert.strictEqual(detectLanguage({ browserLangs: ['ru-RU', 'ru'] }), 'ru');
+assert.strictEqual(detectLanguage({ browserLangs: ['de-DE'] }), 'de');
+assert.strictEqual(detectLanguage({ browserLangs: ['zh-CN'] }), 'zh');
+assert.strictEqual(detectLanguage({ browserLangs: ['fr-FR'] }), 'fr');
+assert.strictEqual(detectLanguage({ browserLangs: ['es-ES'] }), 'es');
+assert.strictEqual(detectLanguage({ browserLangs: ['pt-BR'] }), 'pt');
+assert.strictEqual(detectLanguage({ browserLangs: ['it-IT'] }), 'it');
+assert.strictEqual(detectLanguage({ browserLangs: ['en-US'] }), 'en');
+assert.strictEqual(detectLanguage({ browserLangs: ['pl-PL'] }), 'en'); // fallback
+assert.strictEqual(detectLanguage({ savedLang: 'ru', browserLangs: ['en-US'] }), 'ru'); // preference priority
+
+assert.strictEqual(t('fullBuilds', {}, 'en'), 'Full Builds');
+assert.strictEqual(t('fullBuilds', {}, 'ru'), 'Полные сборки');
+assert.strictEqual(t('fullBuilds', {}, 'de'), 'Vollständige Builds');
+assert.strictEqual(t('fullBuilds', {}, 'zh'), '完整镜像');
+
+assert.strictEqual(formatFacetLabel('packageCategory', 'full', 'ru'), 'Полные сборки');
+assert.strictEqual(formatFacetLabel('packageCategory', 'full', 'en'), 'Full Builds');
+assert.strictEqual(formatFacetLabel('packageCategory', 'update', 'ru'), 'Обновления');
+assert.strictEqual(formatFacetLabel('packageCategory', 'update', 'en'), 'Updates');
+console.log('  [PASS] Тест 4: Модуль мультиязычности (i18n) корректно определяет локаль и форматирует строки');
+
+// Тест 5: Пакетная валидация на всем каталоге из 9148 записей
 const catalogPath = path.join(__dirname, 'data', 'uupdump_builds_raw.json');
 if (fs.existsSync(catalogPath)) {
     const allBuilds = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
@@ -340,11 +552,11 @@ if (fs.existsSync(catalogPath)) {
     for (const b of allBuilds) {
         const buildNum = detectBuildNumber(b.title);
         const os = detectOS(b.title, buildNum);
-        if (os === 'Другая ОС') unknownOSCount++;
+        if (os === 'other') unknownOSCount++;
     }
 
     assert.strictEqual(unknownOSCount, 0, 'В базе 9148 сборок не должно быть неопознанных ОС');
-    console.log(`  [PASS] Тест 4: Пакетная проверка 9148 сборок — 0 неопознанных ОС (100% точность)`);
+    console.log(`  [PASS] Тест 5: Пакетная проверка 9148 сборок — 0 неопознанных ОС (100% точность)`);
 }
 
-console.log('\n Все unit-тесты v1.4.0 успешно пройдены!');
+console.log('\n Все unit-тесты v1.5.0 успешно пройдены!');

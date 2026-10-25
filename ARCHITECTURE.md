@@ -34,16 +34,19 @@ flowchart TD
 
 ## 2. Структура модулей и зоны ответственности
 
-### 2.0. Page & Table Guard Module (`isBuildsPage`, `isBuildsTable`)
+### 2.0. Localization Module (`I18N`, `detectLanguage`, `t`, `formatFacetLabel`)
+- **Ответственность:** Обеспечение мультиязычного интерфейса: английский по умолчанию (`en`), русский (`ru`) для русскоязычной среды, плюс `de`, `zh`, `fr`, `es`, `pt`, `it`. Сохранение выбранного языка в `localStorage`.
+
+### 2.0.1. Page & Table Guard Module (`isBuildsPage`, `isBuildsTable`)
 - **Ответственность:** Защита от ложных срабатываний скрипта на страницах визарда загрузки (`selectedition.php`, `selectlang.php`, `get.php`, `downloadpack.php`, `findfiles.php`) и корректная привязка к целевой таблице сборок на главной странице (`/` и `/index.php`).
 - **Логика:** Проверка белого списка путей URL, исключение вспомогательного блока быстрых кнопок (`.home-quick-options`), обязательное наличие в таблице ссылок на переход к сборкам (`selectlang.php?id=`) и проверка минимального количества строк (`>= 2`).
 
 ### 2.1. Parser Module (`parseRow`, `detectPackageCategory`, `normalizeArch`, `detectOS`, `detectBranch`, `detectType`, `detectBuildNumber`, `detectVersion`)
 - **Ответственность:** Извлечение чистых структурированных метаданных из HTML-элементов `tr` и `td`.
 - **Выход:** Нормализованный объект записи сборки:
-  - `packageCategory`: `'Полные сборки'` | `'Обновления'`
+  - `packageCategory`: `'full'` | `'update'` (отображается через `formatFacetLabel`)
   - `arch`: `x64` | `arm64` | `x86` | `other`
-  - `os`: `Windows 11` | `Windows 10` | `Windows Server` | `Azure Stack HCI` | `Windows CPC OS` | `Windows Holographic` | `Windows Team` | `Системные компоненты`
+  - `os`: `Windows 11` | `Windows 10` | `Windows Server` | `Azure Stack HCI` | `Windows CPC OS` | `Windows Holographic` | `Windows Team` | `sys_components` | `other`
   - `version`: `Future / Experimental` | `26H2` | `24H2` | `23H2` | `22H2` | `21H2` | `20H2` | `1809` | `Insider Canary/Dev/Beta` и др.
   - `branch`: `rs_prerelease` | `ge_release` | `ni_release` | `co_release` | `zn_release` | `br_release` и др.
   - `updateType`: `Standard Build` | `.NET Framework Update` | `Cumulative Update` | `Preview Update` | `Feature Update` | `Update Stack Package` | `Security Update` | `Quality Update` | `Autopilot Update`
