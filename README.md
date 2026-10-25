@@ -33,11 +33,17 @@
 - Установленное расширение [Tampermonkey](https://www.tampermonkey.net/).
 
 ### 2. Установка
+
+#### Способ 1: В 1 клик (Рекомендуется)
+Если у вас установлено расширение **Tampermonkey** или **Violentmonkey**, просто кликните по ссылке:
+👉 **[Установить скрипт с GitHub](https://raw.githubusercontent.com/BasimovIF-AI/userscript-uupdump/master/uupdump-dynamic-filter.user.js)**
+
+Менеджер скриптов откроет диалоговое окно — нажмите кнопку **«Установить»** (Install). Скрипт будет автоматически получать обновления при выходе новых релизов.
+
+#### Способ 2: Вручную
 1. Откройте панель управления расширения **Tampermonkey** в браузере.
-2. Перейдите во вкладку **Утилиты** (Utilities) -> **Импорт из файла** (или создайте новый скрипт через `+`).
-3. Скопируйте и вставьте содержимое файла [`uupdump-dynamic-filter.user.js`](file:///e:/Ильгиз/Documents/VibeCoding/TM_Scripts/userscript-uupdump/uupdump-dynamic-filter.user.js).
-4. Сохраните скрипт (`Ctrl + S`).
-5. Перейдите на любую страницу UUP dump со списком сборок (например, [https://uupdump.net/known.php](https://uupdump.net/known.php) или поиск) — над таблицей автоматически появится интерактивная панель фильтров.
+2. Создайте новый скрипт через `+`.
+3. Вставьте содержимое файла [`uupdump-dynamic-filter.user.js`](file:///e:/Ильгиз/Documents/VibeCoding/TM_Scripts/userscript-uupdump/uupdump-dynamic-filter.user.js) и нажмите `Ctrl + S`.
 
 ---
 

@@ -13,6 +13,8 @@
 // @exclude      *://uupdump.net/findfiles.php*
 // @exclude      *://uupdump.net/faq.php*
 // @icon         https://uupdump.net/static/uupdump/1.2.0/img/logo.svg
+// @updateURL    https://raw.githubusercontent.com/BasimovIF-AI/userscript-uupdump/master/uupdump-dynamic-filter.user.js
+// @downloadURL  https://raw.githubusercontent.com/BasimovIF-AI/userscript-uupdump/master/uupdump-dynamic-filter.user.js
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
