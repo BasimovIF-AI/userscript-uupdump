@@ -242,6 +242,44 @@ function isCandidateBuildsTable({ parentClass, links }) {
     return Boolean(hasBuildLink);
 }
 
+// -------------------------------------------------------------
+// МОДУЛЬ 0.1: ТЕМИЗАЦИЯ И АВТОАДАПТАЦИЯ (THEME ADAPTATION)
+// -------------------------------------------------------------
+function isSiteDarkMode(env = {}) {
+    // 1. Проверяем cookie 'Website-Theme'
+    const cookie = env.cookie || '';
+    const cookieMatch = cookie.match(/(?:^|;\s*)Website-Theme=([^;]+)/);
+    if (cookieMatch) {
+        const val = decodeURIComponent(cookieMatch[1]).trim().toLowerCase();
+        if (val === 'dark') return true;
+        if (val === 'light' || val === 'legacy') return false;
+    }
+
+    // 2. Проверяем наличие dark.css в link
+    if (env.hasDarkCssLink) {
+        return true;
+    }
+
+    // 3. Режим auto / prefers-color-scheme
+    if (env.prefersDark) {
+        const val = cookieMatch ? decodeURIComponent(cookieMatch[1]).trim().toLowerCase() : null;
+        if (val !== 'light' && val !== 'legacy') {
+            return true;
+        }
+    }
+
+    // 4. Fallback по вычисленному цвету body
+    if (env.bodyBg) {
+        const rgb = env.bodyBg.match(/\d+/g);
+        if (rgb && rgb.length >= 3) {
+            const brightness = (parseInt(rgb[0], 10) * 299 + parseInt(rgb[1], 10) * 587 + parseInt(rgb[2], 10) * 114) / 1000;
+            if (brightness < 128) return true;
+        }
+    }
+
+    return false;
+}
+
 function extractUuid(link) {
     if (!link) return '';
     const m = link.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
@@ -464,7 +502,7 @@ const sampleData = [
     }
 ];
 
-console.log('===> Запуск тестов парсера UUP dump v1.5.0...');
+console.log('===> Запуск тестов парсера UUP dump v1.6.0...');
 
 // Тест 1: Валидация целевых страниц URL
 assert.strictEqual(isBuildsPage('/known.php'), true);
@@ -559,4 +597,15 @@ if (fs.existsSync(catalogPath)) {
     console.log(`  [PASS] Тест 5: Пакетная проверка 9148 сборок — 0 неопознанных ОС (100% точность)`);
 }
 
-console.log('\n Все unit-тесты v1.5.0 успешно пройдены!');
+// Тест 6: Детекция тем оформления сайта (Dark, Light, Legacy, Auto)
+assert.strictEqual(isSiteDarkMode({ cookie: 'Website-Theme=dark' }), true, 'Cookie Website-Theme=dark должен возвращать true');
+assert.strictEqual(isSiteDarkMode({ cookie: 'Website-Theme=light' }), false, 'Cookie Website-Theme=light должен возвращать false');
+assert.strictEqual(isSiteDarkMode({ cookie: 'Website-Theme=legacy' }), false, 'Cookie Website-Theme=legacy должен возвращать false');
+assert.strictEqual(isSiteDarkMode({ cookie: 'Website-Theme=auto', prefersDark: true }), true, 'Cookie auto при prefersDark=true должен возвращать true');
+assert.strictEqual(isSiteDarkMode({ cookie: 'Website-Theme=auto', prefersDark: false }), false, 'Cookie auto при prefersDark=false должен возвращать false');
+assert.strictEqual(isSiteDarkMode({ cookie: '', hasDarkCssLink: true }), true, 'Наличие dark.css link должно включать темную тему');
+assert.strictEqual(isSiteDarkMode({ cookie: '', bodyBg: 'rgb(17, 17, 17)' }), true, 'Фон body #111 должен определяться как темная тема');
+assert.strictEqual(isSiteDarkMode({ cookie: '', bodyBg: 'rgb(255, 255, 255)' }), false, 'Фон body #fff должен определяться как светлая тема');
+console.log('  [PASS] Тест 6: Детекция тем оформления (Dark, Light, Legacy, Auto) полностью подтверждена');
+
+console.log('\n Все unit-тесты v1.6.0 успешно пройдены!');

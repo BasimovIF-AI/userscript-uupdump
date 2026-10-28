@@ -37,7 +37,10 @@ flowchart TD
 ### 2.0. Localization Module (`I18N`, `detectLanguage`, `t`, `formatFacetLabel`)
 - **Ответственность:** Обеспечение мультиязычного интерфейса: английский по умолчанию (`en`), русский (`ru`) для русскоязычной среды, плюс `de`, `zh`, `fr`, `es`, `pt`, `it`. Сохранение выбранного языка в `localStorage`.
 
-### 2.0.1. Page & Table Guard Module (`isBuildsPage`, `isBuildsTable`)
+### 2.0.1. Theme Adaptation Module (`isSiteDarkMode`, `injectThemeStyles`, `applyTheme`)
+- **Ответственность:** Автоматическое определение цветовой схемы сайта (через cookie `Website-Theme`, тег `<link ... dark.css>` и системный медиа-запрос `prefers-color-scheme: dark`) и динамическое переключение Scoped CSS классов `.uup-theme-dark` / `.uup-theme-light`. Подписка на системные события изменения схемы для нулевого ослепления и идеальной интеграции с Semantic UI.
+
+### 2.0.2. Page & Table Guard Module (`isBuildsPage`, `isBuildsTable`)
 - **Ответственность:** Защита от ложных срабатываний скрипта на страницах визарда загрузки (`selectedition.php`, `selectlang.php`, `get.php`, `downloadpack.php`, `findfiles.php`) и корректная привязка к целевой таблице сборок на главной странице (`/` и `/index.php`).
 - **Логика:** Проверка белого списка путей URL, исключение вспомогательного блока быстрых кнопок (`.home-quick-options`), обязательное наличие в таблице ссылок на переход к сборкам (`selectlang.php?id=`) и проверка минимального количества строк (`>= 2`).
 

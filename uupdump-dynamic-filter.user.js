@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         UUP dump Dynamic Build Filters
 // @namespace    https://github.com/BasimovIF-AI/userscript-uupdump
-// @version      1.5.0
+// @version      1.6.0
 // @description  Мгновенные динамические фасетные фильтры, быстрый поиск и счетчики сборок для UUP dump (uupdump.net)
 // @author       BasimovIF
 // @match        https://uupdump.net/*
@@ -242,6 +242,204 @@
             if (value === 'other') return t('otherOS');
         }
         return value;
+    }
+
+    // -------------------------------------------------------------
+    // МОДУЛЬ 0.1: ТЕМИЗАЦИЯ И АВТОАДАПТАЦИЯ (THEME ADAPTATION)
+    // -------------------------------------------------------------
+    function isSiteDarkMode() {
+        // 1. Проверяем cookie 'Website-Theme' (устанавливается кнопкой Theme на сайте)
+        if (typeof document !== 'undefined' && document.cookie) {
+            const cookieMatch = document.cookie.match(/(?:^|;\s*)Website-Theme=([^;]+)/);
+            if (cookieMatch) {
+                const val = decodeURIComponent(cookieMatch[1]).trim().toLowerCase();
+                if (val === 'dark') return true;
+                if (val === 'light' || val === 'legacy') return false;
+            }
+        }
+
+        // 2. Проверяем, подключен ли явно dark.css в теге <link> (выбор Dark в теме сайта)
+        if (typeof document !== 'undefined' && document.querySelector) {
+            if (document.querySelector('link[rel="stylesheet"][href*="dark.css"]')) {
+                return true;
+            }
+        }
+
+        // 3. Если тема "auto" или cookie отсутствует — проверяем системную тему через prefers-color-scheme
+        // (в режиме Automatic сайт UUP dump использует @import url('dark.css') (prefers-color-scheme: dark))
+        if (typeof window !== 'undefined' && window.matchMedia) {
+            if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                return true;
+            }
+        }
+
+        // 4. Fallback-проверка по вычисленному цвету фона body
+        if (typeof window !== 'undefined' && window.getComputedStyle && document.body) {
+            const bodyBg = window.getComputedStyle(document.body).backgroundColor;
+            if (bodyBg) {
+                const rgb = bodyBg.match(/\d+/g);
+                if (rgb && rgb.length >= 3) {
+                    const brightness = (parseInt(rgb[0], 10) * 299 + parseInt(rgb[1], 10) * 587 + parseInt(rgb[2], 10) * 114) / 1000;
+                    if (brightness < 128) return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    function injectThemeStyles() {
+        if (typeof document === 'undefined' || !document.head) return;
+        if (document.getElementById('uup-filter-theme-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'uup-filter-theme-styles';
+        style.textContent = `
+            /* Общие стили панели и плавные переходы */
+            #uup-dynamic-filter-panel {
+                transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            }
+            #uup-dynamic-filter-panel select.uup-filter-build-select,
+            #uup-dynamic-filter-panel select.uup-filter-lang-select {
+                transition: all 0.2s ease;
+            }
+
+            /* ================= СВЕТЛАЯ ТЕМА (LIGHT & LEGACY) ================= */
+            #uup-dynamic-filter-panel.uup-theme-light {
+                background-color: rgba(0, 0, 0, 0.02) !important;
+                border: 1px solid rgba(34, 36, 38, 0.15) !important;
+                color: rgba(0, 0, 0, 0.87) !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-header-bar {
+                border-bottom: 1px solid rgba(34, 36, 38, 0.08) !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-title {
+                color: rgba(0, 0, 0, 0.87) !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-group-label {
+                color: rgba(0, 0, 0, 0.85) !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light select.uup-filter-build-select,
+            #uup-dynamic-filter-panel.uup-theme-light select.uup-filter-lang-select {
+                background-color: #ffffff !important;
+                color: #222222 !important;
+                border: 1px solid rgba(34, 36, 38, 0.2) !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light select.uup-filter-build-select option,
+            #uup-dynamic-filter-panel.uup-theme-light select.uup-filter-lang-select option {
+                background-color: #ffffff !important;
+                color: #222222 !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-chip {
+                background-color: transparent !important;
+                border: 1px solid rgba(34, 36, 38, 0.2) !important;
+                color: rgba(0, 0, 0, 0.75) !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-chip:hover:not(.disabled):not(.active) {
+                background-color: rgba(0, 0, 0, 0.05) !important;
+                color: #000000 !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-chip.active {
+                background-color: #2185d0 !important;
+                border-color: #2185d0 !important;
+                color: #ffffff !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-chip:not(.active) .uup-filter-count-badge {
+                background-color: #e8e8e8 !important;
+                color: #444444 !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-light .uup-filter-chip.active .uup-filter-count-badge {
+                background-color: rgba(255, 255, 255, 0.28) !important;
+                color: #ffffff !important;
+            }
+
+            /* ================= ТЁМНАЯ ТЕМА (DARK) ================= */
+            #uup-dynamic-filter-panel.uup-theme-dark {
+                background-color: #111111 !important;
+                border: 1px solid #2a2a2a !important;
+                color: #ffffff !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-header-bar {
+                border-bottom: 1px solid #2a2a2a !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-title {
+                color: #ffffff !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-group-label {
+                color: #e0e0e0 !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark select.uup-filter-build-select,
+            #uup-dynamic-filter-panel.uup-theme-dark select.uup-filter-lang-select {
+                background-color: #1a1a1a !important;
+                color: #ffffff !important;
+                border: 1px solid #2a2a2a !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark select.uup-filter-build-select option,
+            #uup-dynamic-filter-panel.uup-theme-dark select.uup-filter-lang-select option {
+                background-color: #1a1a1a !important;
+                color: #ffffff !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-chip {
+                background-color: #1e1e1e !important;
+                border: 1px solid #333333 !important;
+                color: #dcdcdc !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-chip:hover:not(.disabled):not(.active) {
+                background-color: #2a2a2a !important;
+                color: #ffffff !important;
+                border-color: #444444 !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-chip.active {
+                background-color: #2185d0 !important;
+                border-color: #2185d0 !important;
+                color: #ffffff !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-chip.disabled {
+                background-color: #161616 !important;
+                border-color: #252525 !important;
+                color: #555555 !important;
+                opacity: 0.35 !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-chip:not(.active) .uup-filter-count-badge {
+                background-color: #2d2d2d !important;
+                color: #bbbbbb !important;
+                border: 1px solid #3a3a3a !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-chip.active .uup-filter-count-badge {
+                background-color: rgba(255, 255, 255, 0.25) !important;
+                color: #ffffff !important;
+                border: none !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-clear-build-btn {
+                color: #ffffff !important;
+                border-color: #333333 !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-clear-build-btn:hover {
+                background-color: #2a2a2a !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-reset-btn {
+                border-color: #e0392b !important;
+                color: #ff695e !important;
+            }
+            #uup-dynamic-filter-panel.uup-theme-dark .uup-filter-reset-btn:hover {
+                background-color: #e0392b !important;
+                color: #ffffff !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function applyTheme(panel) {
+        if (!panel) return;
+        injectThemeStyles();
+        const isDark = isSiteDarkMode();
+        if (isDark) {
+            panel.classList.add('uup-theme-dark');
+            panel.classList.remove('uup-theme-light');
+        } else {
+            panel.classList.add('uup-theme-light');
+            panel.classList.remove('uup-theme-dark');
+        }
     }
 
     // -------------------------------------------------------------
@@ -641,11 +839,11 @@
             let hasActiveBuild = state.filters.buildNumber.size > 0;
             if (hasActiveBuild) {
                 buildSelect.style.borderColor = '#2185d0';
-                buildSelect.style.backgroundColor = 'rgba(33, 133, 208, 0.08)';
+                buildSelect.style.backgroundColor = isSiteDarkMode() ? 'rgba(33, 133, 208, 0.25)' : 'rgba(33, 133, 208, 0.08)';
                 if (clearBuildBtn) clearBuildBtn.style.display = 'inline-block';
             } else {
-                buildSelect.style.borderColor = 'rgba(34,36,38,.2)';
-                buildSelect.style.backgroundColor = 'var(--bg-input, rgba(255,255,255,0.9))';
+                buildSelect.style.borderColor = '';
+                buildSelect.style.backgroundColor = '';
                 if (clearBuildBtn) clearBuildBtn.style.display = 'none';
             }
         }
@@ -704,10 +902,11 @@
         groupDiv.style.gap = '6px';
 
         const label = document.createElement('span');
+        label.className = 'uup-filter-group-label';
         label.style.fontWeight = 'bold';
         label.style.fontSize = '0.9em';
         label.style.minWidth = '130px';
-        label.style.opacity = '0.85';
+        label.style.opacity = '0.9';
         label.innerHTML = `<i class="${iconClass}"></i> ${title}:`;
         groupDiv.appendChild(label);
 
@@ -799,10 +998,11 @@
         groupDiv.style.gap = '8px';
 
         const label = document.createElement('span');
+        label.className = 'uup-filter-group-label';
         label.style.fontWeight = 'bold';
         label.style.fontSize = '0.9em';
         label.style.minWidth = '130px';
-        label.style.opacity = '0.85';
+        label.style.opacity = '0.9';
         label.innerHTML = `<i class="${iconClass}"></i> ${title}:`;
         groupDiv.appendChild(label);
 
@@ -815,14 +1015,10 @@
         select.className = 'uup-filter-build-select';
         select.style.padding = '5px 12px';
         select.style.borderRadius = '6px';
-        select.style.border = '1px solid rgba(34,36,38,.2)';
-        select.style.backgroundColor = 'var(--bg-input, rgba(255,255,255,0.9))';
-        select.style.color = 'inherit';
         select.style.fontSize = '0.9em';
         select.style.cursor = 'pointer';
         select.style.outline = 'none';
         select.style.minWidth = '240px';
-        select.style.transition = 'all 0.2s';
 
         // Пункт по умолчанию
         const defaultOpt = document.createElement('option');
@@ -893,12 +1089,12 @@
         panel.className = 'ui segment';
         panel.style.margin = '16px 0';
         panel.style.padding = '14px 18px';
-        panel.style.border = '1px solid rgba(34,36,38,.15)';
         panel.style.borderRadius = '8px';
-        panel.style.backgroundColor = 'var(--bg-panel, rgba(0, 0, 0, 0.02))';
+        applyTheme(panel);
 
         // 1. Верхний бар: Заголовок, язык, поиск и статус
         const headerBar = document.createElement('div');
+        headerBar.className = 'uup-filter-header-bar';
         headerBar.style.display = 'flex';
         headerBar.style.justifyContent = 'space-between';
         headerBar.style.alignItems = 'center';
@@ -906,14 +1102,13 @@
         headerBar.style.gap = '10px';
         headerBar.style.marginBottom = '12px';
         headerBar.style.paddingBottom = '10px';
-        headerBar.style.borderBottom = '1px solid rgba(34,36,38,.08)';
 
         const titleDiv = document.createElement('div');
         titleDiv.style.display = 'flex';
         titleDiv.style.alignItems = 'center';
         titleDiv.style.gap = '8px';
         titleDiv.innerHTML = `
-            <h4 class="ui header" style="margin: 0; display: inline-flex; align-items: center; gap: 6px;">
+            <h4 class="ui header uup-filter-title" style="margin: 0; display: inline-flex; align-items: center; gap: 6px;">
                 <i class="fa-solid fa-filter fa-sm" style="color: #2185d0;"></i>
                 ${t('panelTitle')}
             </h4>
@@ -935,9 +1130,6 @@
         langSelect.title = 'Language / Язык';
         langSelect.style.padding = '5px 8px';
         langSelect.style.borderRadius = '6px';
-        langSelect.style.border = '1px solid rgba(34,36,38,.2)';
-        langSelect.style.backgroundColor = 'var(--bg-input, rgba(255,255,255,0.9))';
-        langSelect.style.color = 'inherit';
         langSelect.style.fontSize = '0.85em';
         langSelect.style.cursor = 'pointer';
         langSelect.style.outline = 'none';
@@ -1085,7 +1277,23 @@
         init();
     }
 
-    // Наблюдение за динамическими изменениями таблицы (пагинация / ajax-обновление)
+    // Слушатель системной смены темы (для режима 'Automatic' на сайте UUP dump)
+    if (typeof window !== 'undefined' && window.matchMedia) {
+        const colorSchemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleSchemeChange = () => {
+            if (state.panelEl) {
+                applyTheme(state.panelEl);
+                updateFacetControls();
+            }
+        };
+        if (colorSchemeMedia.addEventListener) {
+            colorSchemeMedia.addEventListener('change', handleSchemeChange);
+        } else if (colorSchemeMedia.addListener) {
+            colorSchemeMedia.addListener(handleSchemeChange);
+        }
+    }
+
+    // Наблюдение за динамическими изменениями таблицы (пагинация / ajax-обновление / смена темы)
     let observerDebounce = null;
     const observer = new MutationObserver(() => {
         clearTimeout(observerDebounce);
@@ -1096,6 +1304,9 @@
                     state.panelEl = null;
                 }
                 return;
+            }
+            if (state.panelEl) {
+                applyTheme(state.panelEl);
             }
             const tables = Array.from(document.querySelectorAll('table.ui.table, table.table'));
             const table = tables.find(isBuildsTable);
